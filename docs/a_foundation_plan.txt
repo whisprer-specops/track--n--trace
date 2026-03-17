@@ -1,0 +1,1832 @@
+this whole concept is drawn from a cor idea of working with internet sourced data primarily - socialmedia, aark web int, trending news feeds etc., so
+- nodes i think will mos commonly be somwhat abstract structs like ip addresses or social media identities which tend to lack known location/traitional identifier;
+- that makes the lines that connect such things very much vectors of flowing data and hence tending to define edges as the dividers that separate ditinct zones where that data tends not to corss i.e. they ill likely prove to be the bounds between very dissimilar media ehicles or where paywalls split forms of access to whole intellgence worlds
+- flows are going to be clear movements in data and trands of activity in data growth/shrinkage/conversion between nodes 
+- fially our samples will very much be either a data field such as type/category/definng feature i.e. descriptors of the flowig medium or they will be amounts/values/quanta uch as timestamps of events, nmbers present at location, volumes flowing at a time hroough a point
+- fundamentally were data data data and o most of our measures are quantified one way or another as byes size or descriptor word
+
+- our data is likely relatively short lived on the whole - much of measurement is moot within minutes and hence commonly a lifespan might be said expired within 5mns max, maybe 10.
+- types ares are near infinitas far as i can se - if we have a umer of chars or bytes stored we have asmany types as there are permutations
+- storage therefore has to be a sufficiently longstring accompanied by a number to store quanta such as time/size
+
+- although we are generally dealing with shortlived data and quick changing, neverthless i dont think a need for insane real time polling is risk - we are good with every 30s max, often minutes or 2 or 5 and
+- change iis clear - we can define a alue relaqted to type that will be significant chane often quite universal since size in bytes will likely be more than 10k and no grater than 10mb max say - that  immediately dicates a range of likely significant change ,measures
+- caching can herefore be dicted easily as - we cant conveniently hold MB in cache oft and we otoh won have often large sized entites to cache so its sfe to say if its less than x ix acceptable but we neednt uness over y where its too big to hold realtime present
+
+- for graphical map draw we are fortunate - a mere wire frame internatioal border/coast/minimal degree of elevation
+- for click popups we are just displaying clearly readable strings/values with light dividing ines or highlights occasional
+- for entity comparison it would be useful to have multiple colours avail - but its inlikely to need more than 3-4max
+- export snapshots are very much dicted by user requirements - anything from a barebones value per node of ne data type and midpoint vector for value rpresenting volume flow right up to possibly 10 string and 10 values per cardlocation which might be as many as 3-40 instances - a significnt few MB each snapshot.
+
+You’ve narrowed it enough now that the core shape is clear: this is a short-lived, metric-heavy, mostly abstract entity/flow system with optional geography, not a classic GIS app.
+
+Thought for 59s
+
+Three questions still matter before implementation, but I can already pin the model down now:
+
+Is the first target a local desktop app, a browser app, or a desktop app with embedded browser UI?
+
+Do you want raw source payloads preserved at all, or only normalized fields plus optional snapshot export?
+
+Rough ceiling: are you expecting dozens, hundreds, or thousands of simultaneously active entities?
+
+Now the important corrections.
+
+Two conceptual fixes
+
+First: in graph terms, an edge should stay a connection.
+What you described as “dividers between intelligence worlds” is better modeled as a boundary or partition, not an edge.
+
+So keep these separate:
+
+Node = identity, endpoint, account, IP, site, channel, tag cluster
+
+Link/Edge = relation or path between nodes
+
+Flow = measured movement/change along or between links/nodes
+
+Boundary = paywall, platform wall, access seam, linguistic/cultural seam, dark-web/public-web seam
+
+Sample = timestamped observation
+
+Second: “types are near infinite” is true at the content level, but not at the storage-model level.
+You do not want infinite schema. You want a generic metric model.
+
+That means every observation is stored as:
+
+metric key
+
+value
+
+timestamp
+
+source
+
+quality/confidence
+
+optional TTL/significance
+
+That gives you effectively unbounded metric variety without destroying the storage design.
+
+What this tool actually is
+
+This is a:
+
+short-lived, sparse, multi-source, metric graph with optional geographic anchoring
+
+Not a GIS engine, and not really a globe engine either.
+
+That means the right architecture is:
+
+entity graph as the truth
+
+time samples as append records
+
+GeoJSON generated on demand for active visible/clicked things
+
+minimal map scaffold only when spatial context helps
+
+The core data model I’d use
+1. Entities
+
+Stable-ish things with identity.
+
+Every entity should have:
+
+entity_id
+
+entity_kind → node / link / flow / boundary / cluster
+
+label
+
+source_tags
+
+confidence
+
+created_at
+
+expires_at or TTL policy
+
+spatial_anchor optional
+
+topology_anchor optional
+
+Important: many of your entities will have no real location. That is fine.
+
+So an entity can live in one of three spaces:
+
+geo space: lat/lon if known or inferred
+
+topology space: graph/layout coordinates only
+
+null space: no position until requested
+
+Do not force every entity into geography.
+
+2. Metrics
+
+A registry of what fields mean.
+
+Each metric definition should include:
+
+metric_key
+
+display_name
+
+value_type → number / enum / short string / large text ref
+
+unit
+
+change_rule
+
+retention_rule
+
+aggregation_rule
+
+sampling_expectation
+
+default_popup_priority
+
+This is what lets “anything under the sun” remain manageable.
+
+3. Samples
+
+This is the time layer.
+
+Each sample record should carry:
+
+entity_id
+
+metric_key
+
+ts_observed
+
+ts_ingested
+
+value_num or value_str
+
+value_size_bytes
+
+source_id
+
+quality/confidence
+
+ttl_seconds
+
+significance_score
+
+That is your atomic unit.
+
+4. Payload refs
+
+For anything large, do not stuff the whole thing into hot memory.
+
+If a sample includes something substantial, store:
+
+preview string
+
+byte size
+
+content hash
+
+pointer/reference to full payload if preserved
+
+That keeps cache light.
+
+GeoJSON’s role
+
+You were right to keep GeoJSON in the picture, but its role should be narrowed.
+
+GeoJSON should be:
+
+the view/output format
+
+the clickable feature shell
+
+the snapshot/export wrapper
+
+the temporary card-population container
+
+GeoJSON should not be:
+
+the primary time-series store
+
+the raw ingest store
+
+the long-lived in-memory model
+
+So the runtime rule is:
+
+Build GeoJSON only for the active subset the user is seeing or clicking.
+
+That gives you the flexibility you want without the weight.
+
+The time model that fits your use case
+
+This is the missing concept you were circling.
+
+You do not want one single master heartbeat where everything updates together.
+
+You want:
+
+A. per-source cadence
+
+Each source gets its own polling or ingest schedule:
+
+30s
+
+1m
+
+2m
+
+5m
+
+event-driven if available
+
+B. append-only normalized samples
+
+Whenever data arrives, convert it to your generic sample form.
+
+C. latest-value cache
+
+For each active entity+metric, keep only the latest useful state in memory.
+
+D. short ring buffers
+
+For selected or visible entities, keep a short recent buffer:
+
+maybe last 10–20 significant samples
+
+or last 5–10 minutes
+
+E. lazy interpolation
+
+Only interpolate when:
+
+drawing a chart
+
+comparing entities
+
+aligning mixed-cadence metrics
+
+Never globally in the background.
+
+That is how you avoid going heavy.
+
+The exact runtime flow I’d recommend
+1. Scheduler
+
+Knows when each source is due.
+
+2. Collector
+
+Fetches source data.
+
+3. Normalizer
+
+Turns raw source data into:
+
+entity refs
+
+metric refs
+
+sample records
+
+4. Significance gate
+
+Decides whether a new sample is worth storing as a fresh historical point.
+
+5. Latest cache update
+
+Always updates the current state.
+
+6. Ring-buffer update
+
+Only for active/visible/selected entities.
+
+7. Optional append store
+
+Writes significant or periodic checkpoint samples to disk.
+
+8. Eviction
+
+Drops stale in-memory detail after TTL.
+
+That is lean and scalable.
+
+The crucial optimization: not every poll becomes a stored sample
+
+This matters a lot.
+
+For many metrics, you should poll often but store sparingly.
+
+A good rule is:
+
+Store a historical sample only if at least one is true:
+
+value changed materially
+
+a minimum checkpoint interval elapsed
+
+the entity is selected / watched / alerting
+
+the value crossed a threshold
+
+the sample is needed for export/snapshot
+
+Otherwise:
+
+update latest cache only
+
+refresh last_seen
+
+do not append redundant history
+
+That single rule saves huge disk and memory churn.
+
+Significance rules for your domain
+
+Your instinct about size-based change thresholds is good, but I’d make it slightly smarter.
+
+Use both:
+
+absolute delta
+
+relative delta
+
+For example, a change is significant if:
+
+abs(new - old) >= absolute_threshold
+or
+
+abs(new - old) / max(old, floor_value) >= relative_threshold
+
+So for byte/volume-like metrics, something like:
+
+absolute threshold: 10 KB
+
+relative threshold: 10–20%
+
+That handles both small and large values sanely.
+
+For strings/descriptors:
+
+store only on actual change
+
+optionally hash + dedupe identical repeats
+
+Memory policy
+
+Your data is short-lived, so use aggressive but controlled memory rules.
+
+Hot memory
+
+Keep only:
+
+latest values for active entities
+
+short buffers for selected/visible/watched entities
+
+minimal feature shells for current view
+
+Warm storage
+
+Keep:
+
+recent significant samples
+
+enough for comparison and quick charts
+
+maybe 10 minutes to a few hours depending on mode
+
+Cold/export
+
+Keep only if explicitly requested:
+
+snapshots
+
+case exports
+
+preserved investigations
+
+The key principle:
+
+cache state, not bulk payloads
+
+So if something is large:
+
+store metadata in cache
+
+keep full content on disk or not at all
+
+Practical size limits
+
+You mentioned MB-sized entities and not wanting those in cache. That is the right instinct.
+
+I’d use a policy like:
+
+small: under 8–32 KB → safe for hot cache preview
+
+medium: 32–128 KB → metadata + short preview only
+
+large: above 128 KB → reference only, not hot-cached
+
+very large: MB-scale → never hot-cached, only externalized
+
+The exact thresholds depend on target platform, but the pattern is right.
+
+How the UI should think about space
+
+Because many entities are abstract, the UI should support three equally valid views:
+
+1. topology view
+
+Primary for:
+
+who connects to whom
+
+boundaries
+
+clustering
+
+flow splits and merges
+
+2. sparse geo view
+
+Secondary for:
+
+rough country/region context
+
+crossing oceans/deserts/borders
+
+broad spatial reasoning
+
+3. temporal/compare view
+
+Primary for:
+
+sampled changes
+
+before/after
+
+multi-entity comparison
+
+If you try to force all meaning through the map, you will handicap the tool.
+
+Your map layer can stay tiny
+
+Your wireframe idea is right.
+
+You only need:
+
+ultra-light coastlines
+
+country borders
+
+a few major cities/chokepoints if useful
+
+maybe minimal elevation only if it genuinely matters
+
+No full tiles. No rich basemap. No heavy vector world.
+
+For many of your entities, a topological placement will be more honest than a fake geographic one anyway.
+
+How click popups should work
+
+When the user clicks an item:
+
+Immediate
+
+From feature shell + hot cache:
+
+label
+
+kind
+
+source tags
+
+latest 3–10 priority metrics
+
+last seen
+
+confidence
+
+size summary
+
+Lazy-loaded
+
+From warm store:
+
+recent history
+
+less common metrics
+
+descriptor changes
+
+comparison traces
+
+snapshot/export options
+
+That gives a fast UI without dragging the whole universe into memory.
+
+Snapshot sizing
+
+Your snapshot estimate is plausible.
+
+If a snapshot contains:
+
+3–40 instances
+
+up to ~20 fields each
+
+mostly short strings/numbers
+
+lightweight geometry
+
+then a snapshot in the hundreds of KB to a few MB range is completely believable.
+
+That is not scary at all.
+
+The single best architectural decision
+
+Make the system ID-centric, not format-centric.
+
+Meaning:
+
+entities have IDs
+
+metrics have IDs/keys
+
+samples reference both
+
+views ask for subsets by ID
+
+GeoJSON is generated from those IDs on demand
+
+That keeps the whole thing sparse, modular, and cheap.
+
+Recommended concrete model
+
+Here’s the model I would lock in now:
+
+Keep
+
+EntityRegistry
+
+MetricRegistry
+
+LatestStateCache
+
+RecentSampleStore
+
+SnapshotExporter
+
+GeoJSONViewBuilder
+
+Avoid
+
+monolithic GeoJSON as source of truth
+
+global synchronized polling
+
+storing every poll as history
+
+caching large payload bodies
+
+forcing every entity into real geography
+
+Concise plan
+
+Treat node, link, flow, boundary, and sample as separate concepts.
+
+Use a generic metric system instead of trying to predefine “all types.”
+
+Keep the runtime truth as entity graph + sample stream, not GeoJSON.
+
+Generate GeoJSON only for active visible/clicked/exported subsets.
+
+Poll each source on its own cadence and store only significant or checkpoint samples.
+
+Keep latest state + short ring buffers in memory; externalize large payloads immediately.
+
+Make topology + time primary, with sparse geography as optional context.
+
+Next steps
+
+The best next move is to define, in writing, these four contracts before any code:
+
+Entity contract
+
+Metric contract
+
+Sampling/significance contract
+
+View hydration contract
+
+Once those are fixed, the implementation path becomes much easier and much harder to derail.
+
+Confidence:
+
+Error-free status: 0.95
+
+Suitability for purpose: 0.98
+
+Effectiveness: 0.97
+
+Efficiency: 0.98
+
+Completeness: 0.95
+
+the local vs. browser ting is tricksy - by definition it really needs access to online 'live' data - but i very much prefer a local type app that is leaning on user machine resources - i suspect the answer is an app that sits on local machine with a live not-necesarily-browser connect of _some_ sort - whatever best suits accessing dat raning from online datsets/databases acessible through web through say darkeb or social meddia time based analytcs feeds to sampling 'real time' sources such as news, weather, traffic etc. on occasion.
+
+- entity contract i guess i v much a geo location  pinned data drawn muchly fom sources fed in - i.e. more static and recieving its defining characteristcs - they rlate nearly entirlly to multiple metrics and unlikely much else
+- metrics will be defined by their purpose - they can either be time based or typebased with time based tending o have a type and value based on where in the system they sample and type ased having a main type, sub types and values for each of those various types but much more tending to be limited to certain points n the system - nodes, chokepoints/bottlenecks/ins n outs, metrics relate to entties other metrics sampling circumstances but dontmuch care about view status
+- sampling is very much time and user dependent - so little interaction dependent on entity whatsoever, slightly limited by metric due size limitartions of cache /storge bu also there is nfluence of view since commonly users will wnt to sample dependent on what may be in view or otoh that which cant be monitored by view
+- view i see purely as a user choice defined thing and nothing more
+
+I’ve got enough to stop hand-waving now. The main thing I’m tightening is which parts should be truly independent: acquisition, storage, and view cannot be the same layer, or the whole thing will tangle fast.
+
+Thought for 40s
+
+A couple of questions matter, but I can answer the core now:
+
+Do you want the first build to favor lowest RAM/CPU, or fastest time to a working prototype?
+
+Do you want source adapters to be plugin-style and swappable, or are you happy hard-coding a few first sources?
+
+Now the important correction:
+
+The best fit is not browser vs local. It is:
+
+local-first desktop app with a background data engine and a thin UI layer
+
+That solves the “needs live online data” problem without turning the app into a cloud service or a bloated browser tab.
+
+In other words:
+
+local machine runs the engine
+
+engine talks to clearnet/Tor/APIs/feeds
+
+UI talks only to the local engine
+
+GeoJSON is generated as a view product
+
+storage stays local unless user exports
+
+That is the right shape.
+
+The biggest assumption I’d challenge
+
+You said “view is purely user choice defined and nothing more.”
+
+That is almost right, but not fully.
+
+It should be true that view does not define truth.
+But view should still influence hot-state policy:
+
+what gets pre-hydrated
+
+what gets recent history retained
+
+what gets denser sampling while visible/selected
+
+what gets evicted first
+
+So the corrected version is:
+
+view must not own the data model, but it should be allowed to influence cache and detail policy.
+
+That keeps architecture clean without wasting resources.
+
+The architecture I would choose
+1. Local engine
+
+This is the real application.
+
+It handles:
+
+source polling / ingest
+
+normalization
+
+significance filtering
+
+local storage
+
+hot cache
+
+snapshot export
+
+GeoJSON/materialized view generation
+
+This should run as a local process/service.
+
+2. UI client
+
+This is just the operator console.
+
+It handles:
+
+topology view
+
+sparse geo view
+
+time comparison panels
+
+click popups
+
+filters
+
+export requests
+
+It should not scrape, normalize, or own truth.
+
+3. Source adapter layer
+
+Each source gets an adapter.
+
+Examples:
+
+RSS/news
+
+social analytics feeds
+
+public APIs
+
+weather/traffic/event feeds
+
+Tor-accessed sources where legally/ethically appropriate
+
+file/database imports
+
+Every adapter outputs normalized observations into the same internal model.
+
+That is how you avoid spaghetti.
+
+Best local app form
+
+If you want local-first and lightweight, the strongest pattern is:
+
+desktop shell + local backend + local IPC
+
+Three realistic options:
+
+Tauri-style approach
+
+Pros:
+
+light
+
+local desktop feel
+
+web-style UI convenience
+
+far leaner than Electron
+
+Cons:
+
+more plumbing than a pure web app
+
+some native integration complexity
+
+Qt/native desktop
+
+Pros:
+
+strong native control
+
+excellent for complex operator tools
+
+very solid local app model
+
+Cons:
+
+slower UI iteration
+
+more UI development weight
+
+Electron
+
+Pros:
+
+fastest prototype path
+
+easy UI work
+
+Cons:
+
+heavier RAM/CPU
+
+worst fit if efficiency matters
+
+For your goals, Tauri-style local desktop is probably the best strategic fit unless you already want a pure native UI stack.
+
+Reframing your contracts
+
+You are close, but I would tighten all four.
+
+Entity contract
+
+You said entity is “very much a geo location pinned data drawn from sources fed in.”
+
+I would not define it that way.
+
+Many of your core entities will be:
+
+IPs
+
+accounts
+
+sites
+
+channels
+
+topics
+
+clusters
+
+choke points
+
+boundaries
+
+A lot of those are not fundamentally geo-pinned.
+
+A better entity definition is:
+
+Entity = a stable identity container with optional spatial anchor, optional topology anchor, and associated metrics.
+
+So an entity should hold:
+
+identity
+
+kind
+
+labels/tags
+
+source provenance
+
+optional geo anchor
+
+optional graph/topology position
+
+TTL / activity state
+
+relationships to other entities
+
+Geo is optional, not defining.
+
+Metric contract
+
+Your instinct is good, but I’d formalize it more cleanly:
+
+Metric = a typed observation rule, not just a value.
+
+Each metric should define:
+
+key/name
+
+value type: number / enum / short text / ref
+
+unit if numeric
+
+whether time-series or state-like
+
+significance rule
+
+retention rule
+
+default display priority
+
+So yes, some metrics are time-based, some are type/descriptor-based, but both should be handled through one generic registry.
+
+Sampling contract
+
+You’re right that it is mostly:
+
+time dependent
+
+user dependent
+
+source dependent
+
+only secondarily tied to entities
+
+I’d state it as:
+
+Sampling policy belongs to source + metric + operator intent, not primarily to entity.
+
+That means:
+
+source cadence drives pulls
+
+metric policy decides whether to store
+
+user/view/watchlist can temporarily promote detail
+
+entity just receives observations
+
+That is cleaner.
+
+View contract
+
+You want it purely user-defined. Good instinct, but I’d refine it:
+
+View = a user-defined projection over current truth, with permission to request hydration and raise priority, but not redefine the data model.
+
+That preserves separation without making the view useless.
+
+The time problem, solved cleanly
+
+You asked how to make time work without going mad on compute/memory/disk.
+
+The answer is:
+
+Never store “time” inside the visible objects as the main truth.
+
+Instead use three layers.
+
+Hot layer
+
+In RAM:
+
+latest values for active entities
+
+short ring buffers for visible/selected/watched items
+
+small enough for instant UI
+
+Warm layer
+
+On local disk:
+
+recent significant samples
+
+queryable by entity/metric/time
+
+enough for comparisons and quick charts
+
+Export layer
+
+Only when user requests:
+
+snapshots
+
+cases
+
+selected feature bundles
+
+GeoJSON/JSON/Parquet/etc.
+
+That avoids keeping huge history in memory.
+
+The best storage split
+
+For this exact use case, I would not store everything in one system.
+
+I would use:
+
+Local relational/embedded store for truth
+
+Good for:
+
+entities
+
+metrics
+
+latest state
+
+recent samples
+
+indexes
+
+joins for popups
+
+Append-style sample log
+
+Good for:
+
+efficient ingest
+
+durable recent history
+
+checkpointing significant changes
+
+On-demand GeoJSON output
+
+Good for:
+
+map/topology rendering
+
+click targets
+
+snapshot exports
+
+So the runtime truth stays compact, and GeoJSON stays an output artifact.
+
+Practical low-weight data lifecycle
+
+When a source poll occurs:
+
+adapter fetches raw data
+
+normalizer converts it into entity/metric/sample records
+
+significance logic decides:
+
+update latest only
+
+or also append a historical sample
+
+if entity is visible/selected/watched:
+
+update short ring buffer
+
+maybe increase sample fidelity temporarily
+
+old hot items expire after TTL
+
+only requested snapshots are exported
+
+That is how you stay lean.
+
+The right TTL logic for your case
+
+Your stated lifespan of 5–10 minutes is actually very helpful.
+
+Use it.
+
+For most data:
+
+hot TTL: 5–10 min
+
+ring buffers: only for active/watched entities
+
+history retention: maybe longer on disk, but only for significant samples
+
+full payloads: usually not cached hot at all
+
+That means the app is always mostly working with a very small active universe.
+
+How to handle large or weird metric types
+
+You said types can explode combinatorially. True at the content level.
+
+Do not let that infect the schema.
+
+Use a universal pattern:
+
+metric_key
+
+value_num or value_str
+
+value_size_bytes
+
+observed_at
+
+source_id
+
+confidence
+
+ttl
+
+classification tags
+
+So infinite variety becomes finite storage behavior.
+
+For anything bulky:
+
+store preview + size + hash + pointer
+
+not full content in hot cache
+
+What the UI should actually emphasize
+
+From your description, the order of importance is:
+
+topology / flow
+
+metric cards
+
+time comparison
+
+rough geo context
+
+Not the other way around.
+
+So the app should probably default to:
+
+graph/topology panel
+
+sparse geo panel
+
+details/timeline panel
+
+That matches your “plumbing and wiring, not carpets and curtains” model.
+
+Where geography belongs
+
+Geography should be treated as:
+
+optional anchor
+
+rough context
+
+filter lens
+
+export/view aid
+
+Not the source of truth.
+
+That lets you do all the useful abstractions you mentioned:
+
+straight links
+
+geodesics
+
+cut-through-globe chords
+
+rough choke-point zones
+
+sparse world wireframe
+
+All good.
+
+Recommended first implementation stance
+
+I would build this as:
+
+local engine first, local API/IPC second, UI third
+
+That gives you:
+
+testable adapters
+
+clean ingestion
+
+stable storage contracts
+
+multiple future UIs if needed
+
+If you start with the UI as the center, you risk ending up with a tangled collector/renderer hybrid.
+
+The strongest corrected definitions
+
+Here’s the version I’d lock in:
+
+Entity
+
+A stable identity-bearing object with optional geography and optional topology position.
+
+Metric
+
+A typed observation definition with value semantics, retention rules, and significance rules.
+
+Sample
+
+A timestamped observation of a metric for an entity or relation.
+
+View
+
+A user-defined projection that may request hydration and priority, but never owns truth.
+
+GeoJSON
+
+A generated representation of active/exported spatial or abstract features, not the source of truth.
+
+Trade-offs
+Local-first desktop engine
+
+Pros:
+
+privacy
+
+low latency UI
+
+uses user machine resources
+
+good offline-ish resilience for stored data
+
+natural for OSINT workflows
+
+Cons:
+
+adapter complexity
+
+local install/update burden
+
+user machine limitations matter
+
+Browser-first/cloud-heavy
+
+Pros:
+
+easier deployment
+
+easier remote collaboration
+
+Cons:
+
+worse privacy/control
+
+more ongoing infra burden
+
+weaker fit for your philosophy
+
+For what you want, local-first is the right call.
+
+Concise plan
+
+Build a local background engine as the true core.
+
+Keep the UI thin and talking only to the local engine.
+
+Define entities as identity containers with optional geo, not geo-first objects.
+
+Define metrics through a generic registry with TTL/significance rules.
+
+Make sampling policy belong to source + metric + operator intent, not entity.
+
+Let view remain user-defined, but allow it to influence cache/detail priority.
+
+Generate GeoJSON only for active render/export subsets.
+
+Next step
+
+The best next move is to draft the four contracts in their final form:
+Entity, Metric, Sample, View. Once those are precise, the storage schema and app structure will fall out naturally.
+
+Confidence:
+
+Error-free status: 0.95
+
+Suitability for purpose: 0.98
+
+Effectiveness: 0.97
+
+Efficiency: 0.97
+
+Completeness: 0.95
+
+i'm very much of a focus on getting performance from very get-go - so no rushing to prototype, we take it steady and out care into developing lowram/cpu.
+i'm very much in preference to sources being as flexible as possible but that said, we cant operate on zero source and some are such universal powerful usecases that i'm not totl anti a few core hardcoded first sources.
+Thought for 1m 7s
+
+A few decisions still matter before building, and they affect the engine shape quite a lot:
+
+What active scale do you expect on screen at once: 50, 500, or 5,000+ entities/flows?
+
+Should the first release be comfortable on a normal laptop with no discrete GPU?
+
+Do you want adapters to be statically compiled into the binary first, with dynamic plugins only later?
+
+Under the assumptions you just gave, I would lock in this direction now:
+
+The main correction
+
+Do not start with “fully flexible plugin everything.”
+
+That sounds elegant, but from a performance-first stance it usually creates:
+
+more indirection
+
+more serialization
+
+more heap churn
+
+harder profiling
+
+harder guarantees about RAM/CPU
+
+The better compromise is:
+
+hardcode a small number of source adapter classes, but make each class highly configurable.
+
+So not:
+
+one hardcoded source per site/platform
+
+But:
+
+a few hardcoded adapter types that cover most sources.
+
+That gets you both:
+
+early performance discipline
+
+broad source flexibility
+
+Best architecture for your constraints
+Core shape
+
+Use a local native engine as the real application, with a thin desktop UI on top.
+
+Best-fit stack, given your priorities:
+
+Rust engine
+
+native desktop UI or very thin shell
+
+local IPC/API between UI and engine
+
+SQLite for truth/state
+
+Parquet or compressed JSON for export snapshots
+
+GeoJSON only as generated view/output
+
+Why Rust here
+
+Because from day one you care about:
+
+bounded memory
+
+controlled allocation
+
+predictable performance
+
+safe concurrency
+
+long-running local collectors
+
+That points strongly to Rust over a heavier scripting-first prototype.
+
+UI choice
+
+For performance-first, I would challenge the assumption that you need a webview UI first.
+
+A stronger first choice is:
+
+egui/eframe for a native, lean operator console
+
+Why:
+
+low overhead
+
+fast to instrument/profile
+
+sufficient for sparse nodes, lines, cards, charts
+
+no browser tab mindset
+
+no DOM overhead
+
+A later swap to Tauri or another shell remains possible because the UI should not own truth anyway.
+
+The strongest compromise on sources
+
+Build these five adapter classes into the engine first:
+
+HTTP Poller
+For JSON, HTML, lightweight endpoint polling.
+
+RSS/Atom/Feed Poller
+For news/trend style sources.
+
+Stream Adapter
+For WebSocket/SSE or other push-like feeds.
+
+Tor-capable Fetch Adapter
+Same normalized output path, just routed differently.
+
+File/DB Import Adapter
+For local drops, exports, cached source dumps, analyst-provided datasets.
+
+That is the right compromise.
+You are not hardcoding “Twitter,” “news site X,” “weather Y.”
+You are hardcoding the transport and acquisition patterns, which are the durable part.
+
+Then each actual source becomes config:
+
+URL or endpoint
+
+auth mode
+
+parse rule
+
+cadence
+
+metric mapping
+
+TTL
+
+significance thresholds
+
+That gives you flexibility without the cost of a dynamic plugin circus on day one.
+
+What not to do early
+
+Avoid these from the outset:
+
+dynamic runtime plugin loading
+
+ORM-heavy storage
+
+storing raw source payloads in hot memory
+
+forcing all entities into geography
+
+giant generalized schema with dozens of nullable columns
+
+browser-first UI
+
+one thread per source
+
+storing every poll result as historical truth
+
+Those are exactly the sorts of things that quietly murder low-RAM/low-CPU goals.
+
+The real engine model
+1. Entity registry
+
+Stable objects with IDs.
+
+An entity should be:
+
+identity-bearing
+
+optionally geo-anchored
+
+optionally topology-anchored
+
+metric-bearing
+
+TTL-aware
+
+Not geo-first.
+
+2. Metric registry
+
+A small registry describing how values behave.
+
+Each metric defines:
+
+type: numeric / enum / short text / ref
+
+unit
+
+significance rule
+
+retention rule
+
+cache rule
+
+display priority
+
+This is how you support “almost anything” without losing performance.
+
+3. Sample log
+
+Append-only normalized observations:
+
+entity_id
+
+metric_key
+
+timestamp
+
+value
+
+source_id
+
+confidence
+
+TTL
+
+4. Latest-state cache
+
+In memory:
+
+latest value per entity+metric
+
+short ring buffers for hot entities only
+
+minimal card-ready summaries
+
+5. View builder
+
+Builds:
+
+sparse topology features
+
+sparse geo features
+
+popup card payloads
+
+comparison windows
+
+export snapshots
+
+This is where GeoJSON appears, not in the core truth layer.
+
+The single biggest performance rule
+
+Poll frequently, store selectively.
+
+That means:
+
+every source can be checked on its schedule
+
+only significant changes become historical samples
+
+otherwise just update latest state
+
+For your use case, this is exactly right because most data expires quickly and much of it becomes irrelevant within minutes.
+
+Scheduling model
+
+Do not do one loop per source.
+
+Use:
+
+one scheduler
+
+bounded async worker pool
+
+per-source cadence and backoff
+
+one normalization pipeline
+
+one significance gate
+
+That gives you predictable resource use.
+
+A good pattern is:
+
+sources due soon live in a priority queue
+
+workers fetch and normalize
+
+results go through the same cheap pipeline
+
+hot cache updates are constant-time
+
+disk writes are batched
+
+Storage choice
+
+For what you described, I would start with:
+
+SQLite
+
+Use it for:
+
+entities
+
+metric definitions
+
+latest state
+
+recent significant samples
+
+indexes for click/history queries
+
+Why:
+
+low overhead
+
+local-first
+
+excellent tooling
+
+perfectly adequate at your likely poll rates
+
+simpler and safer than overengineering
+
+Snapshot/export
+
+Use:
+
+Parquet + compression for larger analytical exports
+
+GeoJSON/JSON for portable view snapshots
+
+Large payload handling
+
+Never keep large bodies hot unless explicitly needed.
+Store:
+
+preview
+
+hash
+
+byte size
+
+pointer/reference
+
+Not the full content in the active cache.
+
+Cache policy
+
+Your data being short-lived is an advantage.
+
+Use three layers:
+
+Hot
+
+RAM only:
+
+active entities
+
+selected items
+
+visible items
+
+watchlisted items
+
+last few minutes only
+
+Warm
+
+Disk:
+
+recent significant history
+
+enough for compare/scrub/backtrace
+
+Cold
+
+Explicit export only:
+
+snapshots
+
+analyst-preserved cases
+
+That keeps the runtime footprint small.
+
+Challenge to one assumption
+
+You said view is purely user choice.
+
+That is correct at the truth-model level, but from a performance view it should influence:
+
+which ring buffers stay hot
+
+which metrics get denser sampling
+
+which entities keep richer popup data pre-hydrated
+
+what expires first
+
+So view should not define the model, but it absolutely should influence resource priority.
+
+That is an optimization lever, not an architectural impurity.
+
+Rendering strategy
+
+Since you do not need pretty graphics, do not build a globe renderer first.
+
+Build this order instead:
+
+Topology view — primary
+
+Sparse geo projection — secondary
+
+Time/compare panel — co-primary with topology
+
+That is a better fit than trying to force everything through a globe.
+
+For the geo layer:
+
+wireframe coastlines
+
+borders
+
+sparse anchors
+
+straight lines / geodesics / abstract chords
+
+Nothing more until a real need proves itself.
+
+Recommended source strategy from day one
+
+This is the balance I’d strike:
+
+Hardcoded core
+
+Compile in:
+
+scheduler
+
+fetch transports
+
+parse primitives
+
+normalization contracts
+
+cache/store pipeline
+
+Config-defined sources
+
+Define each source in config:
+
+cadence
+
+transport class
+
+parser
+
+metric mapping
+
+thresholds
+
+TTL
+
+tags
+
+Later extensibility
+
+Only after the core is proven and profiled:
+
+optional dynamic plugin ABI
+
+optional scriptable adapters for low-risk noncritical sources
+
+Not before.
+
+That preserves performance discipline without painting you into a corner.
+
+Trade-offs
+Statically compiled adapter classes
+
+Pros:
+
+lower overhead
+
+easier profiling
+
+easier packaging
+
+safer memory behavior
+
+Cons:
+
+slower to add exotic sources
+
+requires planned abstractions
+
+Full plugin freedom early
+
+Pros:
+
+maximum flexibility on paper
+
+Cons:
+
+worse performance
+
+worse debuggability
+
+worse stability
+
+more architecture drift
+
+For your goals, the first option is clearly better.
+
+What I would lock in right now
+
+Rust local engine
+
+native low-overhead UI
+
+adapter classes, not per-source hardcoding
+
+SQLite truth store
+
+append-only normalized sample model
+
+significance-gated history
+
+GeoJSON as generated output
+
+topology-first UI
+
+Concise plan
+
+Build a local Rust engine first, not a browser-first app.
+
+Start with 5 built-in adapter classes, all config-driven.
+
+Use SQLite + hot cache + export snapshots, not GeoJSON as primary storage.
+
+Keep the UI native and thin, with topology/time views as the center.
+
+Make view influence cache priority, but not truth.
+
+Store only significant or checkpoint samples, not every poll result.
+
+Defer dynamic plugins until the core has been profiled under real load.
+
+Confidence:
+
+Error-free status: 0.96
+
+Suitability for purpose: 0.98
+
+Effectiveness: 0.97
+
+Efficiency: 0.98
+
+Completeness: 0.95
+
+Next, the right move is to freeze the Entity, Metric, Sample, and Adapter contracts before touching implementation.
