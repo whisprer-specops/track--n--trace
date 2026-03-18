@@ -1,0 +1,20 @@
+[package]
+name = "skeletrace"
+version = "0.1.0"
+edition = "2021"
+description = "Sparse spatiotemporal flow-graph engine for OSINT telemetry"
+authors = ["wofl"]
+license = "MIT"
+
+[dependencies]
+# Serialization — needed for derives on all core types
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Timestamps — pervasive in samples, TTLs, scheduling
+chrono = { version = "0.4", features = ["serde"] }
+
+# Entity identity — UUIDs for nodes, edges, flows, metrics, sources
+# v4 (random generation) deferred to Stage 2 — avoids getrandom dep that
+# needs edition2024 not supported by Rust 1.75 (Ubuntu apt).
+uuid = { version = "1", features = ["serde"] }

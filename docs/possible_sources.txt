@@ -1,0 +1,99 @@
+1. Public REST & Streaming APIs
+These are the "cleanest" sources, offering structured JSON/GeoJSON data that is ready for programmatic consumption.
+
+Environmental & Infrastructure:
+
+OpenStreetMap (Overpass API): Not just maps, but the ability to query specific tags (e.g., "all hospitals with helipads in a 50km radius").
+
+OpenWeatherMap / Weatherstack: Real-time weather data with historical spatiotemporal archives.
+
+USGS Earthquake Catalog API: Real-time global seismic data with precise coordinates and depth.
+
+Transportation & Logistics:
+
+OpenSky Network API: State vectors of live aircraft via ADS-B data.
+
+Aviationstack / FlightRadar24 (limited): Commercial flight tracking.
+
+MarineTraffic / VesselFinder: AIS data for global shipping.
+
+Social & Event-Based:
+
+GDELT Project: The Global Data on Events, Location, and Tone. It monitors world news in 100+ languages and geolocates every event mentioned.
+
+Waze For Cities: Real-time traffic and incident reporting (often requires a partnership, but some endpoints are accessible).
+
+2. RSS/Atom Feeds (Spatiotemporal Signals)
+Feeds are often overlooked, but they provide a consistent "heartbeat" of activity often tied to specific jurisdictions or locales.
+
+Emergency Services: Many regional police, fire, and EMS departments still publish "Active Incident" feeds that include street addresses or district codes.
+
+Natural Disaster Alerts: GDACS (Global Disaster Alert and Coordination System) provides RSS feeds for floods, tropical cyclones, and volcanoes with coordinate bounds.
+
+Port & Maritime Notices: Major international ports often publish RSS feeds for vessel arrivals/departures and "Notices to Mariners" (local hazards).
+
+3. Web Scraping (The "High-Effort, High-Reward" Tier)
+This is where you extract data from sites that don't want to give it to you easily.
+
+Snap Map (Snapchat): By scraping public "Our Story" geocoordinates, you can aggregate real-time visual "heatmaps" of events (e.g., protests, concerts).
+
+Classifieds & Real Estate: Scraping sites like Craigslist or local equivalents (Zillow, Rightmove) provides spatiotemporal data on economic shifts or displacement.
+
+Infrastructure Dashboards: Many "Smart Cities" have public dashboards for parking availability, bike-share locations, or air quality sensors that lack a public API but can be polled via the DOM.
+
+4. Tor-Routed / Onion Services
+This is the "Deep" side of OSINT. Geospatial data here is rarely explicit; it’s usually derived.
+
+Leak Sites: When a corporate database is dumped, the data often includes customer IP addresses or physical billing addresses. Mapping these "pwned" locations provides a spatiotemporal view of a breach's impact.
+
+Dark Web Marketplaces: Analyzing the "shipping from" locations for illicit goods can help map regional hubs of activity (though these are often intentionally vague, like "Western Europe").
+
+Onion Search Engines (Ahmia, Torch): Indexing onion services for keywords related to specific geographic coordinates or landmarks.
+
+5. Indirect Signal Intelligence (Passive RF & IoT)
+You don't always need an API; sometimes you just need to listen to the "noise" devices make.
+
+Wi-Fi/Bluetooth Probe Requests: Devices constantly shout "I'm looking for my home network!" into the air. By monitoring these at scale (via projects like Wigle.net), you can map the movement of specific hardware globally or identify "electronic fingerprints" of individuals in a specific city.
+
+Satellite Ground Station Metadata: Many commercial satellites (like Starlink or Iridium) have predictable RF signatures. Monitoring these signals (even without decrypting them) tells you when and where high-bandwidth communication is happening—often a precursor to military or industrial activity.
+
+Unsecured Industrial IoT (MQTT/Modbus): Thousands of industrial sensors (water levels, factory temperatures, power grid load) transmit data over unencrypted protocols. Finding these via Shodan or Censys gives you a real-time "pulse" of a city's physical health.
+
+6. Remote Sensing & Environmental "Raster" OSINT
+This is about looking at the Earth as a grid of data points rather than a list of addresses.
+
+Synthetic Aperture Radar (SAR): Unlike regular photos, SAR sees through clouds and at night. It can detect "surface deformation" (e.g., ground sinking before a tunnel collapse) or "coherent change detection" (e.g., seeing where grass has been flattened by a vehicle, even after the vehicle is gone).
+
+Light Pollution & Night-Light Intelligence: Using VIIRS (Visible Infrared Imaging Radiometer Suite) data to track economic activity. If a factory suddenly gets brighter at 3:00 AM for three weeks, they’ve started a night shift—a massive spatiotemporal signal of production spikes.
+
+Multispectral Vegetation Analysis: Monitoring the "health" of crops or forests via NDVI (Normalized Difference Vegetation Index). This is used by hedge funds to predict food shortages or by investigators to find hidden mass graves (where soil disturbance changes plant growth).
+73. "Digital Exhaust" from Metadata & Documents
+Information hiding in plain sight within common files.
+
+Document Geolocation (The PDF Trail): Scraping PDFs, JPEGs, and Office files from government or corporate sites and running them through ExifTool. You’d be surprised how many "confidential" reports were exported by a user whose GPS was active on their tablet, tagging the exact office or field site.
+
+Certificate Transparency (CT) Logs: Every time an SSL certificate is issued, it's logged. While not "geospatial" in a lat/long sense, mapping IP addresses to these certs allows you to see the "spatiotemporal" expansion of a company's digital infrastructure into new regional data centers (e.g., "Why did they just spin up 50 servers in Kazakhstan?").
+
+8. Alternative "Economic" Data (Alt-Data)
+This is the domain of high-finance OSINT, where physical movement equals money.
+
+Retail Foot Traffic: Aggregated (and often anonymized) mobile location data. By looking at "pings" within a specific polygon (like a shopping mall), you can determine the exact hour a business began to fail or a new trend started.
+
+Bill of Lading & Customs Data: Platforms like ImportGenius or Panjiva provide the "what, when, and where" of every shipping container. Mapping these routes gives you a global spatiotemporal view of supply chain shifts.
+
+9. non-strictly geospatial/spatiotemporal:
+
+ | Source family                       | Why it matters                                                                        | Typical examples                                                           | Main downside                                                                    |
+| ----------------------------------- | ------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| Company registries                  | Core for entity resolution, directors, addresses, beneficial ownership, filings       | Companies House, OpenCorporates, SEC EDGAR, national business registers    | Coverage varies by country; some fields are paid or rate-limited                 |
+| Court and legal records             | High-value for disputes, fraud signals, insolvency, enforcement, litigation history   | PACER, CourtListener, local court portals, bankruptcy/insolvency registers | Fragmented access, fee friction, privacy sensitivity                             |
+| Sanctions / PEP / watchlists        | Essential for compliance, risk scoring, and commercial OSINT buyers                   | OFAC, UK sanctions list, EU sanctions, UN lists, Interpol notices          | False positives, identity matching risk, some commercial enrichment is expensive |
+| Procurement / grants / lobbying     | Strong institutional signal for influence, contracts, and vendor relationships        | USASpending, Contracts Finder, TED, SAM.gov, lobbying registers            | Messy schemas, duplicate entities, country-specific quirks                       |
+| Whois / DNS / passive DNS / BGP     | Critical for internet infrastructure mapping and cyber OSINT                          | RDAP, SecurityTrails, RiskIQ/PassiveTotal, bgp.tools, crt.sh               | Good data often costs money; some datasets are heavily commercialized            |
+| Code / package ecosystems           | Great for developer footprint, dependency risk, leaked keys, org mapping              | GitHub, GitLab, npm, PyPI, crates.io, RubyGems, Docker Hub                 | Attribution is noisy; scraping can violate ToS                                   |
+| Web archives / historical capture   | Lets you prove change over time, deleted content, rebrands, old contacts              | Wayback Machine, Common Crawl, archive.today                               | Storage and normalization overhead; archive access can be inconsistent           |
+| Breach / exposed credential data    | Very high investigative value for correlation and victim impact                       | HIBP-style exposure checks, leak corpora, paste/stealer references         | Highest legal and ethical risk; often unsuitable for default ingestion           |
+| App-store and mobile intel          | Useful for company footprint, product launches, geographies, SDKs, permissions        | Apple App Store, Google Play, app intelligence vendors                     | Commercial APIs can be expensive; metadata changes often                         |
+| Job postings / hiring signals       | Excellent for competitive intel and stack/infrastructure detection                    | LinkedIn jobs, Indeed, Greenhouse boards, Lever, Workday                   | Scraping/legal issues; data is noisy and ephemeral                               |
+| Academic / patent / standards data  | Good for R&D, inventor networks, and technical capability mapping                     | Google Patents, Lens, Espacenet, Crossref, OpenAlex                        | Less useful for short-horizon investigations                                     |
+| Public records / gazettes / notices | High-value for official actions, dissolved entities, appointments, land/notice trails | Government gazettes, planning notices, land registries, FOI portals        | Very jurisdiction-specific; some are paywalled                                   |
