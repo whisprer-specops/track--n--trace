@@ -1,0 +1,17 @@
+[package]
+name = "skeletrace"
+version = "0.11.0"
+edition = "2021"
+description = "Sparse spatiotemporal flow-graph engine for OSINT telemetry"
+authors = ["wofl"]
+license = "MIT"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+chrono = { version = "0.4", features = ["serde"] }
+uuid = { version = "1", features = ["serde", "v4", "v5"] }
+ureq = { version = "2", default-features = true, features = ["socks-proxy"] }
+base64 = "0.22"
+rss = "2"
+rusqlite = { version = "0.31", features = ["bundled"] }
