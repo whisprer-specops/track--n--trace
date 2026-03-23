@@ -74,9 +74,7 @@ pub struct RetentionPolicy {
 impl RetentionPolicy {
     pub fn validate(self, value_type: MetricValueType) -> Result<(), ValidationError> {
         if self.hot_duration.is_zero() {
-            return Err(ValidationError::ZeroCapacity(
-                "retention.hot_duration".into(),
-            ));
+            return Err(ValidationError::ZeroCapacity("retention.hot_duration".into()));
         }
         if self.warm_duration < self.hot_duration {
             return Err(ValidationError::InvalidWindow {
@@ -85,9 +83,7 @@ impl RetentionPolicy {
             });
         }
         if self.store_on_change_only && self.max_silent_gap.is_zero() {
-            return Err(ValidationError::ZeroCapacity(
-                "retention.max_silent_gap".into(),
-            ));
+            return Err(ValidationError::ZeroCapacity("retention.max_silent_gap".into()));
         }
         if value_type != MetricValueType::Numeric
             && (self.change_threshold.is_some() || self.relative_change_threshold.is_some())
@@ -148,6 +144,7 @@ impl RetentionPolicy {
         TimeDelta::from_std(self.warm_duration).unwrap_or_else(|_| TimeDelta::days(36_500))
     }
 }
+
 
 #[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
 pub struct RetentionTuning {

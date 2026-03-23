@@ -223,7 +223,9 @@ impl RateLimiter {
     /// How many requests are currently tracked for a domain.
     #[must_use]
     pub fn current_count(&self, domain: &str) -> u32 {
-        self.domains.get(domain).map_or(0, |w| w.count())
+        self.domains
+            .get(domain)
+            .map_or(0, |w| w.count())
     }
 
     /// Forget all state for a domain (useful after config changes).

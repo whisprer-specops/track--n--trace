@@ -158,11 +158,7 @@ impl CacheEntry {
 
     #[must_use]
     pub fn approx_hot_bytes(&self) -> usize {
-        let latest_bytes: usize = self
-            .latest_by_metric
-            .iter()
-            .map(LatestValue::approx_bytes)
-            .sum();
+        let latest_bytes: usize = self.latest_by_metric.iter().map(LatestValue::approx_bytes).sum();
         let ring_bytes: usize = self
             .ring_buffers
             .iter()
@@ -193,9 +189,7 @@ pub struct CacheBudget {
 impl CacheBudget {
     pub fn validate(self) -> Result<(), ValidationError> {
         if self.max_active_entities == 0 {
-            return Err(ValidationError::ZeroCapacity(
-                "cache_budget.max_active_entities".into(),
-            ));
+            return Err(ValidationError::ZeroCapacity("cache_budget.max_active_entities".into()));
         }
         if self.max_total_ring_samples == 0 {
             return Err(ValidationError::ZeroCapacity(

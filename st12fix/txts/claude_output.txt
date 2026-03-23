@@ -1,0 +1,48 @@
+Architected modular Rust transport layer with rate limiting and resilience
+Architected modular Rust transport layer with rate limiting and resilience
+Perfect. I've got everything I need — ValidationError, TransportError, HttpRequestProfile, the full module layout, and your Cargo.toml. No new dependencies required — this builds entirely on ureq + serde + std.
+
+Here's the migration: you rename src/transport.rs to src/transport/mod.rs (no changes to lib.rs needed — mod transport; works for both). I'm building four new submodules alongside it.
+
+Let me write the complete crate.
+
+
+Orchestrated Rust compilation verification setup
+Orchestrated Rust compilation verification setup
+Now let me verify this actually compiles against your types:
+
+
+Scrutinizing lifetime issues in function signatures
+Scrutinizing lifetime issues in function signatures
+Can't install Rust in this sandbox, but I've done a thorough manual review and found one bug to fix. Let me patch it:
+
+
+Marshaled final outputs for delivery
+Marshaled final outputs for delivery
+Now let me package the final deliverable:
+
+
+Synthesized available materials for presentation
+Synthesized available materials for presentation
+1,933 lines across 5 files, zero new dependencies. Here's the summary:
+
+Migration: delete src/transport.rs, drop the transport/ folder into src/, done. Your lib.rs doesn't change, your existing imports don't change. The only breaking change is that TransportError has three new variants — any exhaustive matches need updating.
+
+What I caught and fixed during review: The exponential backoff had a u32 truncation bug where attempt counts ≥32 would silently wrap the multiplier to zero, producing no delay. Fixed by capping at max directly for high attempt counts.
+
+What I couldn't do: verify compilation. Rust isn't available in this sandbox. The code is written against your exact types, your exact ureq version, and your exact dependency set — but you'll be the first to hit cargo check. If it throws anything, paste the errors and I'll fix them immediately.
+
+What's ready to build next once this lands: the filter/query DSL (your #2 priority). That one is pure algorithm work — parser, AST, evaluator — with zero dependency on your transport or storage layers. Say the word.
+
+Transport migration
+Document · MD 
+Mod
+RS 
+Client
+RS 
+Rate limit
+RS 
+Circuit breaker
+RS 
+Retry
+RS 

@@ -1,0 +1,490 @@
+diff -ruN a/src/event.rs b/src/event.rs
+--- a/src/event.rs	2026-03-23 15:19:39.000000000 +0000
++++ b/src/event.rs	2026-03-23 18:27:35.034108875 +0000
+@@ -1,6 +1,6 @@
+-use serde::Deserialize;
++use serde::{Deserialize, Serialize};
+ 
+-#[derive(Debug, Clone, Deserialize)]
++#[derive(Debug, Clone, Serialize, Deserialize)]
+ pub struct PacketEvent {
+     #[serde(default)]
+     pub ts_ms: Option<u64>,
+@@ -19,7 +19,7 @@
+     pub dir: Option<String>,
+ }
+ 
+-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
++#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+ pub enum Lane {
+     Web,
+     Dns,
+diff -ruN a/src/lib.rs b/src/lib.rs
+--- a/src/lib.rs	2026-03-23 15:15:53.000000000 +0000
++++ b/src/lib.rs	2026-03-23 18:27:35.038242063 +0000
+@@ -1,6 +1,7 @@
+ pub mod cli;
+ pub mod event;
+ pub mod model;
++pub mod packet_workflow;
+ pub mod render;
+ pub mod source;
+ pub mod stats;
+@@ -9,3 +10,8 @@
+ pub use event::{Lane, PacketEvent};
+ pub use model::{AppState, Cell};
+ pub use verify::{verify_events, LaneSummary, VerificationReport};
++
++pub use packet_workflow::{
++    verify_packet_request, PacketRenderSurface, PacketVerificationOptions,
++    PacketVerificationReport, PacketVerificationRequest, PacketWorkflowError,
++};
+diff -ruN a/src/operator.rs b/src/operator.rs
+--- a/src/operator.rs	2026-03-23 03:19:48.000000000 +0000
++++ b/src/operator.rs	2026-03-23 18:27:35.036904593 +0000
+@@ -10,6 +10,10 @@
+ use crate::export::{ExportError, SnapshotExportJob, SnapshotExportResult, SnapshotExporter};
+ use crate::governance::{AuditRecord, FailureRecord, SourceCapabilityProfile, SourcePolicy};
+ use crate::materialize::{SparseGeoFeatureCollection, TopologyViewMaterialization};
++use crate::packet_workflow::{
++    verify_packet_request, PacketVerificationReport, PacketWorkflowError,
++    PacketVerificationRequest,
++};
+ use crate::metric::{MetricRetentionReport, RetentionTuning};
+ use crate::observability::EngineEvent;
+ use crate::profile::{EngineProfile, ProfileError};
+@@ -74,6 +78,12 @@
+     }
+ }
+ 
++impl From<PacketWorkflowError> for OperatorError {
++    fn from(value: PacketWorkflowError) -> Self {
++        Self::Cli(value.to_string())
++    }
++}
++
+ pub struct OperatorApi {
+     engine: SkeletraceEngine,
+     exporter: SnapshotExporter,
+@@ -179,6 +189,9 @@
+ 
+     pub fn execute(&mut self, request: OperatorRequest) -> Result<OperatorResponse, OperatorError> {
+         Ok(match request {
++            OperatorRequest::VerifyPackets { request } => {
++                OperatorResponse::PacketVerification(verify_packet_request(&request)?)
++            }
+             OperatorRequest::Tick { now } => OperatorResponse::Tick(self.engine.tick(now)?),
+             OperatorRequest::PollSource { source_id, now } => {
+                 OperatorResponse::Tick(self.engine.poll_source_now(source_id, now)?)
+@@ -269,6 +282,9 @@
+ 
+ #[derive(Debug, Clone, Serialize, Deserialize)]
+ pub enum OperatorRequest {
++    VerifyPackets {
++        request: PacketVerificationRequest,
++    },
+     Tick {
+         now: Timestamp,
+     },
+@@ -348,6 +364,7 @@
+ 
+ #[derive(Debug, Clone, Serialize, Deserialize)]
+ pub enum OperatorResponse {
++    PacketVerification(PacketVerificationReport),
+     Tick(TickReport),
+     Topology(TopologyViewMaterialization),
+     SparseGeo(SparseGeoFeatureCollection),
+@@ -370,6 +387,9 @@
+ 
+ #[derive(Debug, Clone, PartialEq, Eq)]
+ pub enum CliCommand {
++    VerifyPackets {
++        request_path: PathBuf,
++    },
+     ValidateProfile {
+         profile_path: PathBuf,
+     },
+@@ -418,6 +438,9 @@
+             return Err(OperatorError::Cli("missing subcommand".into()));
+         }
+         match values[1].as_str() {
++            "verify-packets" if values.len() == 3 => Ok(Self::VerifyPackets {
++                request_path: PathBuf::from(&values[2]),
++            }),
+             "profile-validate" if values.len() == 3 => Ok(Self::ValidateProfile {
+                 profile_path: PathBuf::from(&values[2]),
+             }),
+@@ -465,6 +488,10 @@
+ pub fn run_cli_command(command: CliCommand) -> Result<OperatorResponse, OperatorError> {
+     let now = Utc::now();
+     match command {
++        CliCommand::VerifyPackets { request_path } => {
++            let request: PacketVerificationRequest = load_json(request_path)?;
++            Ok(OperatorResponse::PacketVerification(verify_packet_request(&request)?))
++        }
+         CliCommand::ValidateProfile { profile_path } => {
+             let profile = EngineProfile::load_json_file(profile_path)?;
+             let view = ViewJob {
+diff -ruN a/src/packet_workflow.rs b/src/packet_workflow.rs
+--- a/src/packet_workflow.rs	1970-01-01 00:00:00.000000000 +0000
++++ b/src/packet_workflow.rs	2026-03-23 18:27:35.034943887 +0000
+@@ -0,0 +1,222 @@
++use std::fs;
++use std::path::{Path, PathBuf};
++
++use serde::{Deserialize, Serialize};
++
++use crate::event::PacketEvent;
++use crate::render::frame_string;
++use crate::verify::verify_events;
++
++#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
++pub enum PacketWorkflowError {
++    Io(String),
++    Parse(String),
++    EmptyInput(String),
++}
++
++impl std::fmt::Display for PacketWorkflowError {
++    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
++        match self {
++            Self::Io(msg) => write!(f, "packet workflow I/O error: {msg}"),
++            Self::Parse(msg) => write!(f, "packet workflow parse error: {msg}"),
++            Self::EmptyInput(msg) => write!(f, "packet workflow empty input: {msg}"),
++        }
++    }
++}
++
++impl std::error::Error for PacketWorkflowError {}
++
++#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
++pub struct PacketVerificationOptions {
++    pub width: usize,
++    pub tick_ms: u64,
++    pub max_alerts: usize,
++    pub include_ascii: bool,
++}
++
++impl Default for PacketVerificationOptions {
++    fn default() -> Self {
++        Self {
++            width: 96,
++            tick_ms: 200,
++            max_alerts: 8,
++            include_ascii: true,
++        }
++    }
++}
++
++#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
++pub struct PacketVerificationRequest {
++    pub input_path: PathBuf,
++    #[serde(default)]
++    pub options: PacketVerificationOptions,
++}
++
++#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
++pub enum PacketRenderSurface {
++    AsciiLandscape {
++        frame: String,
++        width: usize,
++        tick_ms: u64,
++    },
++}
++
++#[derive(Debug, Clone, Serialize, Deserialize)]
++pub struct PacketLaneReport {
++    pub lane_label: String,
++    pub total_events: u64,
++    pub total_bytes: u64,
++    pub anomaly_buckets: u64,
++    pub max_score: f64,
++    pub max_entropy: f64,
++}
++
++#[derive(Debug, Clone, Serialize, Deserialize)]
++pub struct PacketVerificationReport {
++    pub input_path: PathBuf,
++    pub ticks: usize,
++    pub total_events: u64,
++    pub total_bytes: u64,
++    pub alerts: Vec<String>,
++    pub lanes: Vec<PacketLaneReport>,
++    pub surfaces: Vec<PacketRenderSurface>,
++}
++
++pub fn verify_packet_request(
++    request: &PacketVerificationRequest,
++) -> Result<PacketVerificationReport, PacketWorkflowError> {
++    let events = load_packet_events(&request.input_path)?;
++    if events.is_empty() {
++        return Err(PacketWorkflowError::EmptyInput(format!(
++            "{} produced no packet events",
++            request.input_path.display()
++        )));
++    }
++
++    let report = verify_events(
++        events,
++        request.options.width,
++        request.options.tick_ms,
++        request.options.max_alerts,
++    );
++
++    let mut surfaces = Vec::new();
++    if request.options.include_ascii {
++        surfaces.push(PacketRenderSurface::AsciiLandscape {
++            frame: frame_string(&report.state, "verify"),
++            width: report.state.width,
++            tick_ms: report.state.tick_ms,
++        });
++    }
++
++    Ok(PacketVerificationReport {
++        input_path: request.input_path.clone(),
++        ticks: report.ticks,
++        total_events: report.total_events,
++        total_bytes: report.total_bytes,
++        alerts: report.alerts,
++        lanes: report
++            .lanes
++            .into_iter()
++            .map(|lane| PacketLaneReport {
++                lane_label: lane.lane.label().to_string(),
++                total_events: lane.total_events,
++                total_bytes: lane.total_bytes,
++                anomaly_buckets: lane.anomaly_buckets,
++                max_score: lane.max_score,
++                max_entropy: lane.max_entropy,
++            })
++            .collect(),
++        surfaces,
++    })
++}
++
++fn load_packet_events(path: &Path) -> Result<Vec<PacketEvent>, PacketWorkflowError> {
++    let bytes = fs::read(path).map_err(|err| PacketWorkflowError::Io(err.to_string()))?;
++    if bytes.iter().all(u8::is_ascii_whitespace) {
++        return Ok(Vec::new());
++    }
++
++    let extension = path
++        .extension()
++        .and_then(|ext| ext.to_str())
++        .map(|ext| ext.to_ascii_lowercase());
++
++    match extension.as_deref() {
++        Some("jsonl") | Some("ndjson") => parse_jsonl(&bytes),
++        Some("json") => parse_json_payload(&bytes),
++        Some("csv") => parse_csv_payload(&bytes),
++        _ => parse_json_payload(&bytes).or_else(|_| parse_jsonl(&bytes)).or_else(|_| parse_csv_payload(&bytes)),
++    }
++}
++
++fn parse_json_payload(bytes: &[u8]) -> Result<Vec<PacketEvent>, PacketWorkflowError> {
++    if let Ok(events) = serde_json::from_slice::<Vec<PacketEvent>>(bytes) {
++        return Ok(events);
++    }
++    if let Ok(event) = serde_json::from_slice::<PacketEvent>(bytes) {
++        return Ok(vec![event]);
++    }
++    Err(PacketWorkflowError::Parse(
++        "input is not a packet-event JSON object or array".into(),
++    ))
++}
++
++fn parse_jsonl(bytes: &[u8]) -> Result<Vec<PacketEvent>, PacketWorkflowError> {
++    let mut events = Vec::new();
++    for (idx, line) in String::from_utf8_lossy(bytes).lines().enumerate() {
++        let trimmed = line.trim();
++        if trimmed.is_empty() {
++            continue;
++        }
++        let event = serde_json::from_str::<PacketEvent>(trimmed).map_err(|err| {
++            PacketWorkflowError::Parse(format!(
++                "invalid JSONL packet event on line {}: {}",
++                idx + 1,
++                err
++            ))
++        })?;
++        events.push(event);
++    }
++    Ok(events)
++}
++
++#[derive(Debug, Deserialize)]
++struct CsvPacketEvent {
++    ts_ms: Option<u64>,
++    len: usize,
++    #[serde(default)]
++    proto: String,
++    #[serde(default)]
++    src: Option<String>,
++    #[serde(default)]
++    dst: Option<String>,
++    #[serde(default)]
++    sport: Option<u16>,
++    #[serde(default)]
++    dport: Option<u16>,
++    #[serde(default)]
++    dir: Option<String>,
++}
++
++fn parse_csv_payload(bytes: &[u8]) -> Result<Vec<PacketEvent>, PacketWorkflowError> {
++    let mut rdr = csv::ReaderBuilder::new()
++        .trim(csv::Trim::All)
++        .from_reader(bytes);
++    let mut out = Vec::new();
++    for row in rdr.deserialize() {
++        let row: CsvPacketEvent = row
++            .map_err(|err| PacketWorkflowError::Parse(format!("invalid packet CSV row: {err}")))?;
++        out.push(PacketEvent {
++            ts_ms: row.ts_ms,
++            len: row.len,
++            proto: row.proto,
++            src: row.src,
++            dst: row.dst,
++            sport: row.sport,
++            dport: row.dport,
++            dir: row.dir,
++        });
++    }
++    Ok(out)
++}
+diff -ruN a/tests/packet_workflow_contracts.rs b/tests/packet_workflow_contracts.rs
+--- a/tests/packet_workflow_contracts.rs	1970-01-01 00:00:00.000000000 +0000
++++ b/tests/packet_workflow_contracts.rs	2026-03-23 18:27:35.039161246 +0000
+@@ -0,0 +1,133 @@
++use std::fs;
++
++use skeletrace::{
++    run_cli_command, CliCommand, OperatorResponse, PacketRenderSurface,
++    PacketVerificationOptions, PacketVerificationRequest,
++};
++
++fn temp_path(name: &str) -> std::path::PathBuf {
++    let mut path = std::env::temp_dir();
++    path.push(format!(
++        "skeletrace-packet-workflow-{}-{}",
++        std::process::id(),
++        name
++    ));
++    path
++}
++
++#[test]
++fn verify_packets_cli_returns_report_and_ascii_surface() {
++    let input_path = temp_path("events.jsonl");
++    let request_path = temp_path("request.json");
++
++    fs::write(
++        &input_path,
++        concat!(
++            r#"{"ts_ms":0,"len":60,"proto":"dns","sport":53000,"dport":53}"#,
++            "\n",
++            r#"{"ts_ms":220,"len":1500,"proto":"tcp","sport":443,"dport":55123}"#,
++            "\n",
++            r#"{"ts_ms":440,"len":1400,"proto":"tcp","sport":443,"dport":55123}"#,
++            "\n"
++        ),
++    )
++    .unwrap();
++
++    let request = PacketVerificationRequest {
++        input_path: input_path.clone(),
++        options: PacketVerificationOptions {
++            width: 24,
++            tick_ms: 200,
++            max_alerts: 4,
++            include_ascii: true,
++        },
++    };
++    fs::write(&request_path, serde_json::to_vec_pretty(&request).unwrap()).unwrap();
++
++    let response = run_cli_command(CliCommand::VerifyPackets {
++        request_path: request_path.clone(),
++    })
++    .unwrap();
++
++    match response {
++        OperatorResponse::PacketVerification(report) => {
++            assert_eq!(report.total_events, 3);
++            assert!(report
++                .lanes
++                .iter()
++                .any(|lane| lane.lane_label == "DNS" && lane.total_events == 1));
++            assert!(report
++                .lanes
++                .iter()
++                .any(|lane| lane.lane_label == "WEB" && lane.total_events == 2));
++            assert_eq!(report.surfaces.len(), 1);
++            match &report.surfaces[0] {
++                PacketRenderSurface::AsciiLandscape { frame, width, tick_ms } => {
++                    assert!(!frame.is_empty());
++                    assert!(frame.contains("Maxwell's Demon Detector"));
++                    assert_eq!(*width, 24);
++                    assert_eq!(*tick_ms, 200);
++                }
++            }
++        }
++        other => panic!("unexpected response: {other:?}"),
++    }
++
++    let _ = fs::remove_file(input_path);
++    let _ = fs::remove_file(request_path);
++}
++
++#[test]
++fn verify_packets_can_skip_ascii_surface() {
++    let input_path = temp_path("events.json");
++    let request_path = temp_path("request-no-ascii.json");
++
++    fs::write(
++        &input_path,
++        serde_json::to_vec(&vec![
++            serde_json::json!({
++                "ts_ms": 0,
++                "len": 128,
++                "proto": "https",
++                "sport": 443,
++                "dport": 50000
++            }),
++            serde_json::json!({
++                "ts_ms": 250,
++                "len": 64,
++                "proto": "dns",
++                "sport": 53001,
++                "dport": 53
++            }),
++        ])
++        .unwrap(),
++    )
++    .unwrap();
++
++    let request = PacketVerificationRequest {
++        input_path: input_path.clone(),
++        options: PacketVerificationOptions {
++            width: 16,
++            tick_ms: 100,
++            max_alerts: 2,
++            include_ascii: false,
++        },
++    };
++    fs::write(&request_path, serde_json::to_vec_pretty(&request).unwrap()).unwrap();
++
++    let response = run_cli_command(CliCommand::VerifyPackets {
++        request_path: request_path.clone(),
++    })
++    .unwrap();
++
++    match response {
++        OperatorResponse::PacketVerification(report) => {
++            assert_eq!(report.total_events, 2);
++            assert!(report.surfaces.is_empty());
++        }
++        other => panic!("unexpected response: {other:?}"),
++    }
++
++    let _ = fs::remove_file(input_path);
++    let _ = fs::remove_file(request_path);
++}

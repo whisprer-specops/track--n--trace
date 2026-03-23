@@ -9,34 +9,18 @@ use serde::{Deserialize, Serialize};
 use crate::adapter::{AdapterError, ManualPushAdapter, SourceAdapter, SourcePull};
 use crate::cache::{CacheBudget, CacheEntry, DetailTier, RingBuffer};
 use crate::entity::{Boundary, Edge, Node};
-use crate::governance::{
-    AuditRecord, AuditTrail, ExportAuditRecord, FailureRecord, PolicyVerdict, SampleAuditRecord,
-    SampleProvenance, SourceCapabilityProfile, SourcePolicy, TransformStep,
-};
 use crate::ingest::{ScheduleEntry, SourceDefinition, SourceHealth};
-use crate::materialize::{
-    SparseGeoMaterializer, SparseGeoViewMaterialization, TopologyMaterializer,
-    TopologyViewMaterialization,
-};
-use crate::metric::{
-    LatestValue, MetricDefinition, MetricRetentionReport, RetentionTuning, Sample,
-};
-use crate::observability::{EngineEvent, EventBuffer, EventBufferConfig, EventKind, EventLevel};
-use crate::profiling::{
-    cache_health, profile_sparse_geo, profile_topology, EngineHealthReport, PerfProbeConfig,
-    PerfProbeReport, SourceHealthCount,
-};
-use crate::query::{
-    AlertEvent, EntityClass, QueryFilter, QueryResult, QueryRow, Watchlist, WatchlistEvaluation,
-};
+use crate::materialize::{SparseGeoMaterializer, SparseGeoViewMaterialization, TopologyMaterializer, TopologyViewMaterialization};
+use crate::governance::{AuditRecord, AuditTrail, ExportAuditRecord, FailureRecord, PolicyVerdict, SampleAuditRecord, SampleProvenance, SourceCapabilityProfile, SourcePolicy, TransformStep};
+use crate::metric::{LatestValue, MetricDefinition, MetricRetentionReport, RetentionTuning, Sample};
 use crate::store::{EngineStore, StoreError, StoreStats};
+use crate::observability::{EngineEvent, EventBuffer, EventBufferConfig, EventKind, EventLevel};
+use crate::profiling::{cache_health, profile_sparse_geo, profile_topology, EngineHealthReport, PerfProbeConfig, PerfProbeReport, SourceHealthCount};
+use crate::query::{AlertEvent, EntityClass, QueryFilter, QueryResult, QueryRow, Watchlist, WatchlistEvaluation};
+use crate::warm_store::WarmStoreMaintenanceReport;
 use crate::types::{EntityId, MetricId, SourceId, Timestamp, ValidationError};
 use crate::view::{DataCard, DataCardField, TimeRange, ViewJob};
-use crate::warm_store::WarmStoreMaintenanceReport;
-use crate::workload::{
-    ReplayIngestReport, ReplayWorkloadRequest, ViewProfileTarget, WorkloadCheckpointReport,
-    WorkloadRunReport,
-};
+use crate::workload::{ReplayIngestReport, ReplayWorkloadRequest, ViewProfileTarget, WorkloadCheckpointReport, WorkloadRunReport};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum EngineError {
@@ -153,8 +137,10 @@ pub struct SkeletraceEngine {
 impl SkeletraceEngine {
     pub fn new(config: EngineConfig) -> Result<Self, EngineError> {
         config.validate()?;
-        let store =
-            EngineStore::with_backends(config.journal_dir.clone(), config.warm_store_path.clone())?;
+        let store = EngineStore::with_backends(
+            config.journal_dir.clone(),
+            config.warm_store_path.clone(),
+        )?;
 
         Ok(Self {
             config,
@@ -231,6 +217,7 @@ impl SkeletraceEngine {
         self.failures[self.failures.len().saturating_sub(take)..].to_vec()
     }
 
+
     pub fn replay_ready_batches(
         &mut self,
         harness: &mut crate::replay::ReplayHarness,
@@ -272,10 +259,7 @@ impl SkeletraceEngine {
                 metric_id: None,
                 message: format!(
                     "replay ingested: sources={} pulls={} samples={} stored={}",
-                    report.ready_sources,
-                    report.pulls_processed,
-                    report.samples_seen,
-                    report.samples_stored
+                    report.ready_sources, report.pulls_processed, report.samples_seen, report.samples_stored
                 ),
             });
         }
@@ -350,26 +334,11 @@ impl SkeletraceEngine {
             }
         }
         let source_health_counts = vec![
-            SourceHealthCount {
-                health: SourceHealth::Healthy,
-                count: healthy,
-            },
-            SourceHealthCount {
-                health: SourceHealth::Degraded,
-                count: degraded,
-            },
-            SourceHealthCount {
-                health: SourceHealth::Unreachable,
-                count: unreachable,
-            },
-            SourceHealthCount {
-                health: SourceHealth::Disabled,
-                count: disabled,
-            },
-            SourceHealthCount {
-                health: SourceHealth::Pending,
-                count: pending,
-            },
+            SourceHealthCount { health: SourceHealth::Healthy, count: healthy },
+            SourceHealthCount { health: SourceHealth::Degraded, count: degraded },
+            SourceHealthCount { health: SourceHealth::Unreachable, count: unreachable },
+            SourceHealthCount { health: SourceHealth::Disabled, count: disabled },
+            SourceHealthCount { health: SourceHealth::Pending, count: pending },
         ];
 
         let due_sources = self
@@ -405,10 +374,7 @@ impl SkeletraceEngine {
             metric_id: Some(metric_id),
             message: format!(
                 "retuned metric `{}` hot={:?} warm={:?} change_only={}",
-                metric.name,
-                metric.retention.hot_duration,
-                metric.retention.warm_duration,
-                metric.retention.store_on_change_only
+                metric.name, metric.retention.hot_duration, metric.retention.warm_duration, metric.retention.store_on_change_only
             ),
         });
         Ok(report)
@@ -422,16 +388,12 @@ impl SkeletraceEngine {
     ) -> Result<PerfProbeReport, EngineError> {
         config.validate()?;
         match view_job.kind {
-            crate::view::ViewKind::Topology => {
-                profile_topology(view_job, config.iterations, || {
-                    self.materialize_topology(view_job, now)
-                })
-            }
-            crate::view::ViewKind::SparseGeo => {
-                profile_sparse_geo(view_job, config.iterations, || {
-                    self.materialize_sparse_geo(view_job, now)
-                })
-            }
+            crate::view::ViewKind::Topology => profile_topology(view_job, config.iterations, || {
+                self.materialize_topology(view_job, now)
+            }),
+            crate::view::ViewKind::SparseGeo => profile_sparse_geo(view_job, config.iterations, || {
+                self.materialize_sparse_geo(view_job, now)
+            }),
             other => Err(EngineError::Validation(format!(
                 "profiling is only implemented for topology/sparse-geo views, not {:?}",
                 other
@@ -566,13 +528,11 @@ impl SkeletraceEngine {
         now: Timestamp,
     ) -> Result<(), EngineError> {
         view_job.validate()?;
-        let requested_tier = view_job
-            .detail_override
-            .unwrap_or(if view_job.requests_history() {
-                DetailTier::Sampled
-            } else {
-                DetailTier::Active
-            });
+        let requested_tier = view_job.detail_override.unwrap_or(if view_job.requests_history() {
+            DetailTier::Sampled
+        } else {
+            DetailTier::Active
+        });
 
         let default_ring_capacity = self.config.default_ring_capacity;
         let requests_history = view_job.requests_history();
@@ -638,10 +598,7 @@ impl SkeletraceEngine {
                 source_id: None,
                 entity_id: None,
                 metric_id: None,
-                message: format!(
-                    "tick complete: due={} polled={} evicted={}",
-                    report.due_sources, report.polled_sources, evicted
-                ),
+                message: format!("tick complete: due={} polled={} evicted={}", report.due_sources, report.polled_sources, evicted),
             });
         }
         Ok(report)
@@ -699,26 +656,15 @@ impl SkeletraceEngine {
         Ok(SparseGeoMaterializer::build(&self.store, view_job, now)?)
     }
 
-    fn entity_class_label_status(
-        &self,
-        entity_id: EntityId,
-    ) -> Option<(EntityClass, String, crate::entity::EntityStatus)> {
+    fn entity_class_label_status(&self, entity_id: EntityId) -> Option<(EntityClass, String, crate::entity::EntityStatus)> {
         if let Some(node) = self.store.node(entity_id) {
             return Some((EntityClass::Node, node.label.clone(), node.status));
         }
         if let Some(edge) = self.store.edge(entity_id) {
-            return Some((
-                EntityClass::Edge,
-                format!("edge:{}->{}", edge.source, edge.target),
-                edge.status,
-            ));
+            return Some((EntityClass::Edge, format!("edge:{}->{}", edge.source, edge.target), edge.status));
         }
         if let Some(boundary) = self.store.boundary(entity_id) {
-            return Some((
-                EntityClass::Boundary,
-                boundary.label.clone(),
-                boundary.status,
-            ));
+            return Some((EntityClass::Boundary, boundary.label.clone(), boundary.status));
         }
         None
     }
@@ -735,9 +681,7 @@ impl SkeletraceEngine {
             if !filter.entities.matches_id(entity_id) || !filter.matches_metric(metric_id) {
                 continue;
             }
-            let Some((entity_class, entity_label, entity_status)) =
-                self.entity_class_label_status(entity_id)
-            else {
+            let Some((entity_class, entity_label, entity_status)) = self.entity_class_label_status(entity_id) else {
                 continue;
             };
             if let Some(required_class) = filter.entities.class {
@@ -782,19 +726,11 @@ impl SkeletraceEngine {
             });
         }
 
-        rows.sort_by(|a, b| {
-            b.timestamp
-                .cmp(&a.timestamp)
-                .then_with(|| a.entity_label.cmp(&b.entity_label))
-                .then_with(|| a.metric_name.cmp(&b.metric_name))
-        });
+        rows.sort_by(|a, b| b.timestamp.cmp(&a.timestamp).then_with(|| a.entity_label.cmp(&b.entity_label)).then_with(|| a.metric_name.cmp(&b.metric_name)));
         if let Some(limit) = filter.limit {
             rows.truncate(limit);
         }
-        Ok(QueryResult {
-            generated_at: now,
-            rows,
-        })
+        Ok(QueryResult { generated_at: now, rows })
     }
 
     pub fn evaluate_watchlist(
@@ -910,11 +846,7 @@ impl SkeletraceEngine {
         })
     }
 
-    fn poll_source(
-        &mut self,
-        source_id: SourceId,
-        now: Timestamp,
-    ) -> Result<TickReport, EngineError> {
+    fn poll_source(&mut self, source_id: SourceId, now: Timestamp) -> Result<TickReport, EngineError> {
         let source = self
             .store
             .source(source_id)
@@ -1129,11 +1061,7 @@ impl SkeletraceEngine {
         }
     }
 
-    fn mark_source_success(
-        &mut self,
-        source_id: SourceId,
-        now: Timestamp,
-    ) -> Result<(), EngineError> {
+    fn mark_source_success(&mut self, source_id: SourceId, now: Timestamp) -> Result<(), EngineError> {
         let schedule = {
             let source = self
                 .store
@@ -1249,9 +1177,11 @@ impl SkeletraceEngine {
             }
             EngineError::UnknownSource(id)
             | EngineError::MissingAdapter(id)
-            | EngineError::WrongAdapterKind(id) => {
-                FailureRecord::storage(Some(*id), now, error.to_string())
-            }
+            | EngineError::WrongAdapterKind(id) => FailureRecord::storage(
+                Some(*id),
+                now,
+                error.to_string(),
+            ),
         }
     }
 
@@ -1265,11 +1195,7 @@ fn ensure_ring_buffer(
     metric_id: MetricId,
     capacity: usize,
 ) -> Result<(), EngineError> {
-    if entry
-        .ring_buffers
-        .iter()
-        .any(|buffer| buffer.metric_id == metric_id)
-    {
+    if entry.ring_buffers.iter().any(|buffer| buffer.metric_id == metric_id) {
         return Ok(());
     }
     entry

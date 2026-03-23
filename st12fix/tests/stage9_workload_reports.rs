@@ -2,13 +2,13 @@ use std::time::Duration;
 
 use chrono::{TimeDelta, Utc};
 use skeletrace::{
-    AdapterKind, AuditRecord, Confidence, EngineConfig, EntityId, EntityStatus, FlowId, GeoCoord,
-    InterpolationMethod, ManualPushAdapter, MetricDefinition, MetricId, MetricValueType,
-    OperatorApi, OperatorRequest, OperatorResponse, PollCadence, Priority, Quality, ReplayBatch,
-    ReplayWorkloadRequest, RetentionPolicy, Sample, SampleValue, SkeletraceEngine,
+    AdapterKind, AuditRecord, Confidence, EngineConfig, EntityId, EntityStatus,
+    FlowId, GeoCoord, InterpolationMethod, ManualPushAdapter, MetricDefinition, MetricId,
+    MetricValueType, OperatorApi, OperatorRequest, OperatorResponse, PollCadence, Priority,
+    Quality, ReplayBatch, ReplayWorkloadRequest, RetentionPolicy, Sample, SampleValue,
     SnapshotExporter, SourceDefinition, SourceHealth, SourceId, SourceKind, SourcePull,
-    SourceSchedule, Tag, TimeRange, TransformStep, ViewJob, ViewJobId, ViewKind, ViewProfileTarget,
-    WorkloadFixture,
+    SourceSchedule, SkeletraceEngine, Tag, TimeRange, TransformStep, ViewJob, ViewJobId,
+    ViewKind, ViewProfileTarget, WorkloadFixture,
 };
 
 fn manual_source(source_id: SourceId) -> SourceDefinition {
@@ -93,9 +93,7 @@ fn replay_ready_batches_ingests_fixture_and_records_replay_provenance() {
     let entity_id = EntityId::new();
 
     let mut engine = SkeletraceEngine::new(EngineConfig::default()).unwrap();
-    engine
-        .register_metric(numeric_metric(metric_id, source_id, "volume"))
-        .unwrap();
+    engine.register_metric(numeric_metric(metric_id, source_id, "volume")).unwrap();
     engine.register_node(node(entity_id, now)).unwrap();
     engine
         .register_source(
@@ -153,9 +151,7 @@ fn replay_workload_report_tracks_checkpoints_and_view_profiles() {
     let entity_id = EntityId::new();
 
     let mut engine = SkeletraceEngine::new(EngineConfig::default()).unwrap();
-    engine
-        .register_metric(numeric_metric(metric_id, source_id, "volume"))
-        .unwrap();
+    engine.register_metric(numeric_metric(metric_id, source_id, "volume")).unwrap();
     engine.register_node(node(entity_id, now)).unwrap();
     engine
         .register_source(
@@ -232,9 +228,7 @@ fn workload_fixture_round_trips_and_operator_runs_workload() {
     let entity_id = EntityId::new();
 
     let mut engine = SkeletraceEngine::new(EngineConfig::default()).unwrap();
-    engine
-        .register_metric(numeric_metric(metric_id, source_id, "volume"))
-        .unwrap();
+    engine.register_metric(numeric_metric(metric_id, source_id, "volume")).unwrap();
     engine.register_node(node(entity_id, now)).unwrap();
     engine
         .register_source(
@@ -268,9 +262,11 @@ fn workload_fixture_round_trips_and_operator_runs_workload() {
     assert_eq!(loaded.label, fixture.label);
     assert_eq!(loaded.batches.len(), 1);
 
-    let exporter =
-        SnapshotExporter::new(temp_dir.join("exports"), Option::<std::path::PathBuf>::None)
-            .unwrap();
+    let exporter = SnapshotExporter::new(
+        temp_dir.join("exports"),
+        Option::<std::path::PathBuf>::None,
+    )
+    .unwrap();
     let mut api = OperatorApi::new(engine, exporter);
 
     let response = api

@@ -2,11 +2,12 @@ use std::time::Duration;
 
 use chrono::Utc;
 use skeletrace::{
-    AdapterKind, CacheBudget, Confidence, EngineConfig, EntityId, EntityStatus, EventBufferConfig,
-    EventKind, GeoCoord, InterpolationMethod, MetricDefinition, MetricId, MetricValueType, Node,
-    NodeKind, PerfProbeConfig, PollCadence, Priority, Quality, RetentionPolicy, RetentionTuning,
-    Sample, SampleValue, SkeletraceEngine, SourceDefinition, SourceHealth, SourceId, SourceKind,
-    SourcePull, SourceSchedule, Tag, TimeRange, ViewJob, ViewJobId, ViewKind,
+    AdapterKind, CacheBudget, Confidence, EngineConfig, EntityId, EntityStatus,
+    EventBufferConfig, EventKind, GeoCoord, InterpolationMethod, MetricDefinition, MetricId,
+    MetricValueType, Node, NodeKind, PerfProbeConfig, PollCadence, Priority, Quality,
+    RetentionPolicy, RetentionTuning, Sample, SampleValue, SourceDefinition, SourceHealth,
+    SourceId, SourceKind, SourcePull, SourceSchedule, SkeletraceEngine, Tag, TimeRange, ViewJob,
+    ViewJobId, ViewKind,
 };
 
 fn manual_source(source_id: SourceId) -> SourceDefinition {
@@ -65,12 +66,7 @@ fn node(entity_id: EntityId, now: chrono::DateTime<chrono::Utc>) -> Node {
     }
 }
 
-fn sample(
-    entity_id: EntityId,
-    metric_id: MetricId,
-    source_id: SourceId,
-    now: chrono::DateTime<chrono::Utc>,
-) -> Sample {
+fn sample(entity_id: EntityId, metric_id: MetricId, source_id: SourceId, now: chrono::DateTime<chrono::Utc>) -> Sample {
     Sample {
         entity_id,
         metric_id,
@@ -110,9 +106,7 @@ fn engine_health_report_and_event_log_track_runtime_activity() {
             include_trace: true,
         })
         .unwrap();
-    engine
-        .register_metric(numeric_metric(metric_id, source_id, "volume"))
-        .unwrap();
+    engine.register_metric(numeric_metric(metric_id, source_id, "volume")).unwrap();
     engine.register_node(node(entity_id, now)).unwrap();
     engine
         .register_source(
@@ -147,12 +141,8 @@ fn engine_health_report_and_event_log_track_runtime_activity() {
         .any(|entry| entry.health == SourceHealth::Healthy && entry.count == 1));
 
     let events = engine.recent_events(16);
-    assert!(events
-        .iter()
-        .any(|event| event.kind == EventKind::SourceRegistered));
-    assert!(events
-        .iter()
-        .any(|event| event.kind == EventKind::SourcePollSuccess));
+    assert!(events.iter().any(|event| event.kind == EventKind::SourceRegistered));
+    assert!(events.iter().any(|event| event.kind == EventKind::SourcePollSuccess));
 }
 
 #[test]
@@ -163,9 +153,7 @@ fn retention_tuning_updates_policy_and_reports_counts() {
     let entity_id = EntityId::new();
 
     let mut engine = SkeletraceEngine::new(EngineConfig::default()).unwrap();
-    engine
-        .register_metric(numeric_metric(metric_id, source_id, "volume"))
-        .unwrap();
+    engine.register_metric(numeric_metric(metric_id, source_id, "volume")).unwrap();
     engine.register_node(node(entity_id, now)).unwrap();
     engine
         .register_source(
@@ -219,9 +207,7 @@ fn profile_materialization_and_prune_cycle_return_perf_reports() {
     let entity_id = EntityId::new();
 
     let mut engine = SkeletraceEngine::new(EngineConfig::default()).unwrap();
-    engine
-        .register_metric(numeric_metric(metric_id, source_id, "volume"))
-        .unwrap();
+    engine.register_metric(numeric_metric(metric_id, source_id, "volume")).unwrap();
     engine.register_node(node(entity_id, now)).unwrap();
 
     let view = ViewJob {

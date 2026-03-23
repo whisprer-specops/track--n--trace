@@ -1,0 +1,1564 @@
+ok fren, so i'm trying to avod building immensely high compute globe  models and high memory requirement tile/vector/node maps.
+
+- i'm picturing only keeping a minimal actual virtual framework of gloe in computer concept only;
+- track data via  nodes and vectors that are only plotted in spacetime o  this minmal virtual globe frame a per requirement - i.e. if there's only 3 dtatypes with minimal spatal necessity - then only store/plot/track tha minimum and dont bother to even load/map-plot/have knowledge of more
+- if something requires greater degree of accuracy or timing ppoints then that and only that s plotted with more frequency/concentration spatially, and further, dta is deleted from memory as soon as requirements pass keeping total memeory/compute to minimmum.
+- my theory is you can do the actual heavy gfx very light by only calculating gfx upon final display for a very localise point upon demand and basically all else is blank/zero data eist even except where things are tracked or followed across time
+- i.e. no simulating whole globe constnat full gfx, no everything real time all the time even whennot in view.
+Thought for 16s
+
+Yes — the core idea is sound.
+
+What you’re describing is not a conventional globe/map engine. It is a sparse spatiotemporal telemetry renderer with a tiny Earth reference model behind it. That is exactly the right direction if your goal is to avoid monstrous RAM/compute costs.
+
+Two assumptions to challenge first:
+
+You cannot have “no globe knowledge at all.”
+You still need a minimal global reference frame:
+
+Earth radius / ellipsoid
+
+lat/lon/alt ↔ Cartesian transform
+
+camera/view transform
+
+optional country outline / coastlines only if needed for context
+
+But this can be tiny.
+
+Deleting data instantly can be too aggressive.
+If you purge the moment it leaves requirement scope, you can lose:
+
+smoothing/interpolation
+
+short replay/debug ability
+
+continuity for route animations
+
+Better: use very short TTLs / ring buffers, not hard immediate destruction.
+
+The right model
+
+You want a system built around:
+
+canonical space-time coordinates
+
+sparse nodes and vectors
+
+event-driven loading
+
+view-dependent rendering
+
+TTL-based memory eviction
+
+level-of-detail only where demanded
+
+That is a strong architecture.
+
+The best mental model
+
+Think of it as:
+
+Earth = math, not data
+Routes = sparse graph
+Graphics = on-demand projection of only active graph elements
+
+So instead of:
+
+full globe mesh
+
+full tile pyramid
+
+all data always resident
+
+continuous global updates
+
+you do:
+
+one tiny globe reference
+
+only active nodes/edges/samples in memory
+
+only visible or requested things rendered
+
+only high-density sampling where precision is demanded
+
+What I would build
+1. Minimal world core
+
+Store almost nothing globally except:
+
+ellipsoid constants
+
+geodesic helpers
+
+coarse projection helpers
+
+optional ultra-low-res coastlines or boundaries
+
+This can be tiny.
+
+2. Sparse telemetry graph
+
+Use entities like:
+
+Node: endpoint, hop, relay, observed location
+
+Edge: relation/path between nodes
+
+Track: time-varying state over a node/edge
+
+Sample: timestamped metric packet
+
+ViewJob: render request for a region/time span
+
+This is far lighter than a tile engine.
+
+3. Separate static and dynamic data
+
+Do not keep re-emitting full geometry every update.
+
+Keep:
+
+static-ish: node positions, route topology
+
+dynamic: latency, jitter, status, packet loss, flow rate, confidence, timestamps
+
+Then only dynamic metrics update every 30–60s.
+
+That saves huge amounts of churn.
+
+4. Multi-resolution only where needed
+
+For every edge/route, define a sampling policy:
+
+low-detail: just endpoints + maybe 1 midpoint
+
+medium: a few geodesic interpolation points
+
+high: denser temporal/spatial samples only for selected objects
+
+So if a route is only being watched coarsely:
+
+2–5 points
+
+If zoomed or under analysis:
+
+20–100 points
+
+If forensic / precision mode:
+
+more, temporarily
+
+This is the correct adaptive strategy.
+
+5. View-driven rendering
+
+Nothing should render unless at least one is true:
+
+in viewport
+
+selected
+
+queried
+
+alerting
+
+needed for continuity/animation
+
+Everything else remains abstract data only, or fully absent.
+
+This is where the real performance win comes from.
+
+6. Aggressive lifecycle rules
+
+Each object should have:
+
+TTL
+
+last_seen
+
+priority
+
+detail tier
+
+eviction policy
+
+Example:
+
+current active route data: keep live
+
+stale but recent: keep 2–5 min compressed
+
+old detail samples: discard
+
+topology skeleton: keep if cheap, rebuild if needed
+
+That gives continuity without memory creep.
+
+Where your theory is strongest
+
+Your strongest idea is this:
+
+Do not simulate what is not being observed or needed.
+
+That is exactly how to keep this tractable.
+
+For your use case, the system should behave more like:
+
+an instrument panel
+than
+
+a planet simulator
+
+Where you need to be careful
+1. “Only calculate final gfx locally” is mostly right, but…
+
+You still need enough off-screen state for:
+
+camera transitions
+
+animation continuity
+
+culling decisions
+
+route entry/exit into view
+
+So not literally zero global context — just minimal.
+
+2. Internet paths are not true geographic curves
+
+If these are IP routes, the map path is often inferential.
+So avoid pretending you know the cable’s real physical line unless you actually do.
+
+Better to represent:
+
+observed node locations
+
+inferred segment arcs
+
+confidence score
+
+3. GeoJSON may be fine at the edge, not ideal internally
+
+GeoJSON is okay for interchange or feeding a frontend, but internally I would use a leaner structure:
+
+arrays / structs
+
+binary blobs
+
+compact typed records
+
+Then export to GeoJSON only when needed.
+
+4. Full deletion can cause jittery visuals
+
+If data expires instantly, things can blink/pop.
+Use:
+
+fade-out
+
+short retention
+
+ring buffer
+
+interpolation cache
+
+Much nicer.
+
+The architecture I’d recommend
+Core pipeline
+
+Ingest event/sample
+
+Resolve to sparse entities
+
+Assign required detail tier
+
+Update minimal topology/state
+
+Project only requested visible subset
+
+Render
+
+Evict expired high-detail state
+
+Internal data tiers
+
+Tier 0: world math only
+
+Tier 1: active nodes/edges
+
+Tier 2: recent dynamic metrics
+
+Tier 3: temporary high-resolution local samples
+
+Tier 4: discarded / archived / streamed out
+
+That gives you disciplined control.
+
+Practical design choice
+
+For your use case, I would not build:
+
+map tiles
+
+global vector databases
+
+terrain
+
+detailed country polygons
+
+continuous globe refresh
+
+permanent dense routing histories
+
+I would build:
+
+tiny Earth reference layer
+
+sparse active graph
+
+per-object adaptive detail
+
+view-conditioned rendering
+
+short-lived buffers
+
+optional export snapshots
+
+A compact rule set
+
+A good rule engine could be:
+
+If not visible and not selected: no render geometry
+
+If active but low priority: endpoints only
+
+If zoomed/selected: interpolate more points
+
+If alert condition: temporarily raise detail + retention
+
+If stale: demote detail, then evict
+
+That gets you most of the win.
+
+Verdict
+
+Your theory is fundamentally correct.
+
+The right implementation is a:
+
+sparse, event-driven, LOD-managed, viewport-conditioned spatiotemporal graph engine
+
+—not a globe engine.
+
+That is exactly how to avoid blowing memory and compute.
+
+Trade-offs
+Pros
+
+very low memory
+
+low CPU/GPU usage
+
+scalable to sparse monitoring
+
+easy to prioritize what matters
+
+natural fit for transient network telemetry
+
+Cons
+
+less suitable for rich cartography
+
+less suitable for full-world simultaneous awareness
+
+requires careful cache/TTL design
+
+paths may be representational, not literal
+
+more custom logic than “just use a map library”
+
+Concise plan
+
+Define the world as math only, not as a loaded globe dataset.
+
+Model everything as nodes, edges, and timed metric samples.
+
+Keep static topology separate from changing telemetry.
+
+Use adaptive detail tiers per object, not global precision.
+
+Render only visible/selected/active subsets.
+
+Use TTL + ring buffers instead of permanent histories or instant purges.
+
+Export GeoJSON only as a view/output layer, not as the main in-memory model.
+
+If you want, next I’ll give you the exact in-memory schema and render/update loop for this architecture.
+
+Confidence:
+
+Error-free status: 0.95
+
+Suitability for purpose: 0.98
+
+Effectiveness: 0.97
+
+Efficiency: 0.98
+
+Completeness: 0.93
+
+i should fill you in just a lil ore one more time before we begin any building:
+- i'm planning an OSINT tool.
+- this eans i have interest in number dta for given point locations across sampled time points
+- i dont need fancy gfx, i dont need accurate road-rotes or pretty city layouts i can follow and not get lost in - i need node connections, node data at points and the ability to track fro one to another or compare.
+- this means it's not worrying about realism of ip links being geo accurate or POIs being relevant ot real world places and objects etc. so much as data matters - where it starts, how much flows how fast and where it ends up
+were talkingg interst in the plumbing and the wiring nt the carpets curtains and pictures on the walls
+- this means real world stuff like actual cities, desets oceans streets etc. can be kept surprisingly low - ajor POI cities or objects, areas that are inaccessible due large body of water or desert etc., major ommunication/travel/transport of goods etc. piplines
+- but no need for pretty shape perfect, scenic curvy,follow the route everywhere relistic world mapping
+- we can have geodesics, stright lines - even cut through the globe and emerge other side if a link makes it relevant.
+
+we're skeletal, based on needs and data; not real or pretty or even realistic.
+Thought for 12s
+
+A few questions that matter before building, but I can already steer the architecture now:
+
+Is this primarily browser-based, desktop, or both?
+
+Do you need live streaming only, or also short replay / scrub-back?
+
+Roughly how many simultaneous nodes / flows do you expect on screen at once — tens, hundreds, thousands?
+
+Now the important challenge to your current assumption:
+
+The biggest correction
+
+You may not want a “globe tool” at all.
+
+From what you’ve described, your primary object is not “the world.” It is:
+
+entities
+
+connections
+
+flows
+
+time
+
+comparison
+
+That means the geographic display should probably be only one view, not the core model.
+
+A stronger design is:
+
+Topology/graph view for plumbing/wiring
+
+Sparse geo view for rough spatial context
+
+Timeline/metric view for sampled change over time
+
+If you make the globe/map the core, you risk optimizing the wrong thing.
+
+What your tool really is
+
+It sounds like a:
+
+sparse spatiotemporal flow-analysis engine with optional geographic projection
+
+That is good news, because it is much lighter than a real map engine.
+
+Your assumptions that are good
+
+These are solid:
+
+no need for photorealism
+
+no need for dense base map tiles
+
+no need for exact road/path following
+
+no need to retain irrelevant world state
+
+no need for full-Earth continuous rendering
+
+no need for real-world-perfect routing geometry
+
+That is exactly the right constraint set for a lean OSINT visualizer.
+
+What I would not build
+
+I would avoid:
+
+full tile stack
+
+high-res vector maps
+
+terrain
+
+realistic globe simulation
+
+always-loaded basemap datasets
+
+GeoJSON as the main in-memory data model
+
+redrawing the whole world every update
+
+What I would build instead
+1. A tiny world scaffold
+
+Keep only enough world knowledge for context:
+
+lat/lon reference math
+
+optional low-res coastlines
+
+a very small set of anchor places:
+
+major cities
+
+major chokepoints
+
+large oceans/deserts/barriers
+
+major transport/comms corridors if useful
+
+This is not a map. It is a context skeleton.
+
+2. A sparse graph core
+
+Internally, treat everything as:
+
+Node
+
+Edge
+
+Flow
+
+Sample
+
+Observation window
+
+That becomes your actual truth model.
+
+Node
+
+A point with:
+
+id
+
+kind
+
+lat/lon if known or inferred
+
+confidence
+
+tags
+
+current metrics
+
+Edge
+
+A relation with:
+
+source
+
+target
+
+mode
+
+directionality
+
+confidence
+
+optional geometry hint
+
+Flow
+
+A time-bound thing moving across an edge path:
+
+rate
+
+volume
+
+type
+
+latency/jitter/etc.
+
+time window
+
+Sample
+
+Timestamped numeric observations:
+
+node sample
+
+edge sample
+
+flow sample
+
+That is far more important than geographic detail.
+
+3. Multiple geometry modes
+
+Do not force one visual representation.
+
+Each connection can render as one of:
+
+straight 2D line
+
+geodesic arc
+
+abstract chord
+
+through-globe shortcut
+
+topology-only non-geographic edge
+
+This is useful because your use case is analytical, not cartographic.
+
+4. Adaptive detail by need
+
+Only allocate detail when needed.
+
+Examples:
+
+overview: endpoints only
+
+selected flow: endpoints + intermediate nodes
+
+high-interest flow: denser temporal samples
+
+forensic compare mode: more retained samples in a short window
+
+That matches your “skeletal unless needed” requirement.
+
+Best design principle
+
+Use this rule:
+
+Nothing exists in memory at high detail unless it is currently useful for a question the analyst is asking.
+
+That is the correct operating principle here.
+
+Trade-offs
+If you go too minimal
+
+Pros:
+
+tiny memory footprint
+
+fast rendering
+
+simple mental model
+
+Cons:
+
+can lose continuity
+
+can lose debugging/replay ability
+
+may make comparisons feel jumpy
+
+If you keep a short rolling buffer
+
+Pros:
+
+smooth display
+
+easy compare
+
+easy anomaly inspection
+
+still lightweight
+
+Cons:
+
+slightly more RAM
+
+more lifecycle logic
+
+For your tool, the sweet spot is probably:
+
+sparse live state
+
+short ring buffers
+
+optional snapshot export
+
+no long in-memory history unless requested
+
+A more optimal UI than “just a globe”
+
+I would strongly consider a 3-pane design:
+
+Pane A: topology
+
+Best for:
+
+who connects to whom
+
+what flows where
+
+bottlenecks
+
+branching
+
+comparison
+
+Pane B: sparse geo projection
+
+Best for:
+
+rough location context
+
+transnational spans
+
+seeing spatial clustering / region crossings
+
+Pane C: time/metrics
+
+Best for:
+
+sampled values
+
+comparison over time
+
+anomaly detection
+
+That is much stronger than making geography do all the work.
+
+On GeoJSON specifically
+
+GeoJSON is fine for:
+
+interchange
+
+snapshots
+
+feeding a frontend layer
+
+debug exports
+
+But internally I would prefer:
+
+compact structs / typed arrays
+
+adjacency lists
+
+ring buffers
+
+per-entity metric stores
+
+Then emit GeoJSON only for display/export.
+
+Minimal world context set
+
+You do not need pretty real-world mapping, but you probably do want a tiny contextual layer containing only:
+
+coastlines
+
+country outlines
+
+major cities
+
+major maritime chokepoints
+
+major backbone/cable/transport hubs if relevant
+
+large impassable regions only if analytically helpful
+
+Even that can be very lightweight.
+
+Recommended render rules
+
+If not visible and not selected: do not render
+
+If visible but low priority: minimal line + endpoints
+
+If selected: show labels + metrics + denser samples
+
+If stale: fade then evict
+
+If alerting: promote detail temporarily
+
+If comparing: pin short history buffer
+
+That gives you the sparse behavior you want.
+
+Verdict
+
+Your framing is good, and I’d sharpen it further:
+
+You are not building a world model.
+You are building a query-driven sparse flow graph with optional geo anchoring.
+
+That is the right way to keep compute and memory very low.
+
+Concise plan
+
+Make the graph, not the globe, your primary data model.
+
+Keep only a tiny geographic scaffold for context.
+
+Represent flows as nodes + edges + time samples.
+
+Support multiple edge render modes: straight, arc, abstract, through-globe.
+
+Use short ring buffers, not permanent in-memory history.
+
+Treat GeoJSON as an output/view format, not the internal source of truth.
+
+Build the UI around topology + geo + timeline, not geo alone.
+
+Next steps
+
+The best next move is to define these four things before any code:
+
+the exact entity schema
+
+the update lifecycle
+
+the retention/TTL rules
+
+the three-view UI contract
+
+Confidence:
+
+Error-free status: 0.96
+
+Suitability for purpose: 0.98
+
+Effectiveness: 0.97
+
+Efficiency: 0.98
+
+Completeness: 0.94
+
+ok,i'm with you but there's still missing concept:
+- geojson comes in as; any node or connection line or whatever needs a quick 'click and pop up a range of dtaatypes onfo - anything under the goddamn sun might be required so we require a data format that can store alot efficiently, be useful for a thing, an item - e.g. a node or a vector or w/e and cotain many very widley varying, flexibly source types of data that will gnerally be just a number value or a single word descriptor. i reckon geojson is ideal for this but we need not stor masses - merely have whatever databases are necessary for te datasets required on hand and from them draw the populated geojson data cards containing info for a given node/vector -to-b or w/e element - that way for any given user on demand a speicifc limited number of databases is accessed and only the data for the selected elements is either pulled/stored
+- the one thing i haven;t fully framed in my head yet is how to handle the time aspect:
+realtime constant streaming may not be required butthere's very much an element of time separated repeat samples that miust be related and then dislayed or even on demand stored as snapshots - this means a whole awareness of time as a presnt and ongoing concept within the data universe and also the capabilty to feed in new data on a semi-continuous basis - meaning somehow there needs to be a capability to perform every x time periods a data pull fro a source - database/stream of relaitme data sampled/data posted at a different timing interval to be interpolated.
+how the fuck do we make that best work in our context, without going crazy heavy memory/compute/disk access?
+
+I’ve got the missing piece now: the geometry and the time-series should be treated as different species of data, then joined only when the user actually needs a card, line, or comparison view.
+
+Thought for 19s
+
+Yes — this is the right question, and the answer is:
+
+do not make GeoJSON carry your time universe.
+Make GeoJSON the spatial envelope / clickable feature shell, and keep the time-varying measurements in a separate append-only time-series layer that is joined on demand.
+
+That is the clean way to get:
+
+flexible click-pop data cards
+
+semi-continuous sampled updates
+
+optional snapshots
+
+low RAM
+
+low disk churn
+
+no giant always-live globe model
+
+The key correction
+
+Your instinct about GeoJSON is half right:
+
+right: GeoJSON is excellent for a node/edge/feature shell with properties and IDs
+
+wrong: GeoJSON is a bad primary store for repeated sampled temporal data
+
+If you try to keep re-writing or accumulating time samples inside GeoJSON features, it will get bloated, awkward, and expensive fast.
+
+The better split is:
+
+1. Spatial/identity layer
+
+This is small and mostly stable.
+
+Use it for:
+
+node identity
+
+edge identity
+
+geometry
+
+labels
+
+tags
+
+current/latest summary values
+
+references to richer data elsewhere
+
+This can absolutely be represented as GeoJSON when needed.
+
+Example idea
+
+A node feature might hold:
+
+id
+
+kind
+
+label
+
+lat
+
+lon
+
+status
+
+latest_latency
+
+latest_volume
+
+last_seen
+
+metric_refs
+
+source_refs
+
+That keeps it clickable and useful.
+
+2. Time-series layer
+
+This is where repeated samples live.
+
+Store records like:
+
+entity_id
+
+metric_id
+
+timestamp
+
+value_num or value_enum
+
+quality/confidence
+
+source_id
+
+sample_interval
+
+optional aggregation_type
+
+That gives you a proper temporal universe without stuffing history into the geometry objects.
+
+3. On-demand hydration
+
+When the user clicks a node or vector, do not already have all possible data sitting in memory.
+
+Instead:
+
+identify feature by entity_id
+
+pull latest summary values from a hot cache
+
+pull recent time samples only for requested metrics
+
+build a temporary “data card” object for the popup
+
+discard or cache briefly
+
+That matches your sparse philosophy exactly.
+
+The architecture that fits your use case
+A. Graph/context store
+
+Very small, always cheap.
+
+Stores:
+
+nodes
+
+edges
+
+minimal geometry
+
+tags
+
+relationship topology
+
+low-res world context if desired
+
+Think:
+who/where/connected-to-whom
+
+B. Metric dictionary
+
+A registry of what a field means.
+
+Stores:
+
+metric name
+
+unit
+
+type: number / enum / short text
+
+expected cadence
+
+interpolation rules
+
+retention rules
+
+source mapping
+
+This is important because “anything under the sun” becomes manageable only if each datum is classified.
+
+Without a metric dictionary, chaos arrives quickly.
+
+C. Append-only sample store
+
+Every new observation becomes a small record.
+
+Think:
+what changed, when, from where
+
+This should be append-oriented, not rewrite-oriented.
+
+D. Hot cache
+
+Only recent / active / visible things stay in memory.
+
+Think:
+
+last value per metric per entity
+
+short ring buffer for active entities
+
+maybe last 5–30 minutes depending on need
+
+This is what keeps the UI snappy.
+
+E. Snapshot/export layer
+
+Used only if you want to persist a moment or short span.
+
+Think:
+
+selected entities
+
+selected metrics
+
+time range or instant
+
+optional rendered GeoJSON output
+
+Not the core runtime format.
+
+The correct time model
+
+This is the part that was missing conceptually:
+
+You do not need one universal “every x seconds everything updates” clock.
+
+Instead you want:
+
+1. Independent source cadences
+
+Each source has its own rhythm:
+
+every 30s
+
+every 1 min
+
+every 5 min
+
+event-driven push
+
+occasional manual query
+
+Do not force them into one synchronized ingest cadence.
+
+2. Normalized timestamps
+
+Every sample gets:
+
+observation time
+
+ingest time
+
+source cadence if known
+
+That lets you compare mixed-rate sources cleanly.
+
+3. Late binding for interpolation
+
+Do not globally pre-interpolate all data.
+
+Only interpolate:
+
+when graphing
+
+when comparing
+
+when the user asks for aligned time windows
+
+when rendering a metric that benefits from smoothness
+
+That is a huge compute saver.
+
+Best practice for memory/compute efficiency
+Keep three temporal tiers
+Tier 1: hot
+
+In RAM, tiny, recent, active only.
+
+Contains:
+
+latest sample per entity+metric
+
+short ring buffer for on-screen / selected items
+
+Example:
+
+last 20 samples
+or
+
+last 10 minutes
+
+Tier 2: warm
+
+On disk, indexed, compact.
+
+Contains:
+
+recent historical samples
+
+queryable by entity, metric, time range
+
+This is where “click and show me recent change” comes from.
+
+Tier 3: cold
+
+Optional archive / snapshot storage.
+
+Contains:
+
+compressed snapshots
+
+exported cases
+
+preserved investigations
+
+This avoids bloating the hot system.
+
+The crucial rule
+
+Only active entities earn hot memory.
+Everything else lives as:
+
+latest summary only
+
+or disk-only history
+
+or nothing at all if expired
+
+How to handle repeated pulls without going heavy
+
+Use a scheduler + collectors + normalizer pattern.
+
+Scheduler
+
+Knows:
+
+source
+
+cadence
+
+next due time
+
+jitter/backoff
+
+priority
+
+Collector
+
+Pulls from source when due.
+
+Normalizer
+
+Converts incoming source data into standard sample records.
+
+Router
+
+Sends each sample to:
+
+latest-value cache
+
+active ring buffer if entity is hot
+
+append store
+
+alert logic if needed
+
+That means no giant polling loop rebuilding the world every tick.
+
+The most important optimization
+
+Do not treat all metrics equally.
+
+Each metric should have a policy:
+
+poll cadence
+
+storage precision
+
+interpolation method
+
+retention duration
+
+whether latest-only is enough
+
+whether history matters
+
+whether it belongs in popup by default
+
+Example:
+
+Metric A: current status
+
+latest value only
+
+no interpolation
+
+24h retention maybe
+
+Metric B: throughput
+
+numeric
+
+sampled every 30s
+
+interpolate for graph only
+
+keep 2h warm, 24h cold maybe
+
+Metric C: descriptor tag
+
+string
+
+changes rarely
+
+store only when changed
+
+This policy-based handling prevents unnecessary churn.
+
+Very important: delta storage
+
+For many OSINT-ish metrics, values do not change every sample.
+
+So instead of storing a duplicate record every time:
+
+store only on change, or
+
+store at lower rate when stable, higher rate when volatile
+
+This can massively cut disk and memory usage.
+
+A good rule:
+
+if unchanged, update last_seen
+
+only append new sample if value changed beyond threshold or time gap exceeded
+
+That alone can save you a lot.
+
+Popup/data-card strategy
+
+For a clicked node/edge:
+
+What should be immediate
+
+From hot cache / feature properties:
+
+ID
+
+type
+
+label
+
+current status
+
+latest key metrics
+
+last seen
+
+confidence
+
+source summary
+
+What should be lazy-loaded
+
+From warm store:
+
+recent history chart
+
+comparison range
+
+less common metrics
+
+provenance trail
+
+This gives a fast UI without preloading everything.
+
+Suggested runtime object model
+Spatial feature shell
+
+For nodes/edges:
+
+entity_id
+
+geometry
+
+kind
+
+label
+
+tags
+
+latest_summary
+
+metric_catalog_ref
+
+Sample record
+
+entity_id
+
+metric_id
+
+ts_observed
+
+ts_ingested
+
+value_num or value_code
+
+quality
+
+source_id
+
+Active cache entry
+
+latest_by_metric
+
+ring_buffers
+
+last_accessed
+
+ttl
+
+is_visible
+
+is_selected
+
+This is enough to keep it lean.
+
+How to think about interpolation
+
+You mentioned different timing intervals and possibly interpolating.
+
+The correct approach is:
+
+Never interpolate globally into stored data unless absolutely necessary.
+
+Instead:
+
+keep raw observed samples
+
+resample to a common time grid only for charting or comparison
+
+perform interpolation only for the metrics currently being viewed
+
+So if one source samples at 30s and another at 1 min:
+
+store both raw
+
+when graph requested, align onto 1 min or chosen display interval
+
+compute then discard
+
+That avoids constant background compute.
+
+Snapshots without bloat
+
+A snapshot should not be “dump the whole world.”
+
+A snapshot should be:
+
+chosen entities
+
+chosen time
+
+chosen metrics
+
+chosen view context
+
+So a snapshot becomes a compact investigation artifact, not a memory burden.
+
+You can store:
+
+a rendered GeoJSON snapshot for portability
+
+plus a lighter manifest that references the underlying sample ranges
+
+What I would do in your exact context
+Use GeoJSON for:
+
+node/edge shells
+
+visible display output
+
+popup-compatible feature properties
+
+snapshot export if needed
+
+Do not use GeoJSON for:
+
+repeated temporal history
+
+ingest pipeline storage
+
+active metric ring buffers
+
+heavy comparison datasets
+
+Use separate stores for:
+
+graph identity and geometry
+
+time samples
+
+hot latest-value cache
+
+optional snapshot exports
+
+That is the winning split.
+
+The trade-offs
+If you put time history inside GeoJSON
+
+Pros:
+
+simple mentally
+
+portable
+
+Cons:
+
+bloated
+
+slow to update
+
+awkward querying
+
+hard interpolation
+
+repeated rewriting
+
+If you split spatial and temporal layers
+
+Pros:
+
+scalable
+
+cheap in RAM
+
+cheap in disk I/O
+
+good popup hydration
+
+good history handling
+
+good for sparse on-demand rendering
+
+Cons:
+
+slightly more architecture
+
+requires IDs and joins
+
+more disciplined schema design
+
+For your use case, the split architecture is clearly the better choice.
+
+Recommended operating rules
+
+Geometry is mostly static.
+
+Time samples are append-only.
+
+Hot memory holds only active/recent entities.
+
+Popup cards are hydrated on demand.
+
+Interpolation happens only for viewed metrics.
+
+Stable values should not be redundantly re-stored every cycle.
+
+Snapshots are selective artifacts, not full dumps.
+
+Concise plan
+
+Make GeoJSON the feature shell, not the time-series database.
+
+Define a metric dictionary so arbitrary fields stay manageable.
+
+Store samples as entity_id + metric_id + timestamp + value records.
+
+Keep only latest values + short ring buffers in RAM.
+
+Poll each source on its own cadence with a scheduler/collector/normalizer pipeline.
+
+Interpolate only on render/query, never globally in the background.
+
+Build popup cards by joining feature shell + hot cache + recent history on demand.
+
+What to build first
+
+Before any code, define these four contracts:
+
+1. Entity contract
+
+What is a node, edge, flow, sample?
+
+2. Metric contract
+
+What types exist, how are they stored, when do they expire?
+
+3. Sampling contract
+
+What sources poll when, what counts as a changed value, what gets cached?
+
+4. Query/render contract
+
+What gets fetched for:
+
+map draw
+
+click popup
+
+compare two entities
+
+export snapshot
+
+That will prevent a lot of future pain.
+
+Confidence:
+
+Error-free status: 0.96
+
+Suitability for purpose: 0.98
+
+Effectiveness: 0.97
+
+Efficiency: 0.98
+
+Completeness: 0.95

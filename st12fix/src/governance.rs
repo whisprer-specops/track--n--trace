@@ -140,7 +140,8 @@ impl SourcePolicy {
         {
             return PolicyVerdict::deny("authenticated sources are disabled by policy");
         }
-        if !self.allow_restricted_sources && capability.access_mode == SourceAccessMode::Restricted
+        if !self.allow_restricted_sources
+            && capability.access_mode == SourceAccessMode::Restricted
         {
             return PolicyVerdict::deny("restricted/private sources are disabled by policy");
         }
@@ -156,7 +157,9 @@ impl SourcePolicy {
         if !self.allow_rate_limited_sources && capability.rate_limited {
             return PolicyVerdict::deny("rate-limited sources are disabled by policy");
         }
-        if !self.allow_tor_transport && matches!(source.adapter, AdapterKind::TorHttpPoller) {
+        if !self.allow_tor_transport
+            && matches!(source.adapter, AdapterKind::TorHttpPoller)
+        {
             return PolicyVerdict::deny("tor-routed sources are disabled by policy");
         }
         if !self.allow_automatic_queries && source.schedule.is_automatic() {
@@ -165,16 +168,12 @@ impl SourcePolicy {
         if source.schedule.is_automatic()
             && capability.automation_support == AutomationSupport::ManualOnly
         {
-            return PolicyVerdict::deny(
-                "source capability is manual-only but schedule is automatic",
-            );
+            return PolicyVerdict::deny("source capability is manual-only but schedule is automatic");
         }
         if matches!(source.schedule, SourceSchedule::EventDriven)
             && capability.automation_support == AutomationSupport::ManualOnly
         {
-            return PolicyVerdict::deny(
-                "source capability is manual-only but schedule is event-driven",
-            );
+            return PolicyVerdict::deny("source capability is manual-only but schedule is event-driven");
         }
         if matches!(source.adapter, AdapterKind::TorHttpPoller)
             && capability.transport_support == TransportSupport::DirectOnly
@@ -185,15 +184,16 @@ impl SourcePolicy {
             && capability.transport_support == TransportSupport::TorOnly
             && source.schedule.is_automatic()
         {
-            return PolicyVerdict::deny(
-                "source capability requires tor transport for automatic polling",
-            );
+            return PolicyVerdict::deny("source capability requires tor transport for automatic polling");
         }
         PolicyVerdict::Allow
     }
 
     #[must_use]
-    pub fn allows_raw_payload_export(&self, capability: &SourceCapabilityProfile) -> bool {
+    pub fn allows_raw_payload_export(
+        &self,
+        capability: &SourceCapabilityProfile,
+    ) -> bool {
         self.allow_raw_payload_export && capability.supports_raw_payload_export
     }
 }
@@ -207,9 +207,7 @@ pub enum PolicyVerdict {
 impl PolicyVerdict {
     #[must_use]
     pub fn deny(reason: impl Into<String>) -> Self {
-        Self::Deny {
-            reason: reason.into(),
-        }
+        Self::Deny { reason: reason.into() }
     }
 
     #[must_use]
@@ -243,7 +241,11 @@ pub struct FailureRecord {
 
 impl FailureRecord {
     #[must_use]
-    pub fn from_adapter_error(source_id: SourceId, at: Timestamp, error: &AdapterError) -> Self {
+    pub fn from_adapter_error(
+        source_id: SourceId,
+        at: Timestamp,
+        error: &AdapterError,
+    ) -> Self {
         let (class, code, detail) = classify_adapter_error(error);
         Self {
             at,
@@ -279,41 +281,17 @@ impl FailureRecord {
 
 fn classify_adapter_error(error: &AdapterError) -> (FailureClass, String, String) {
     match error {
-        AdapterError::Validation(msg) => (
-            FailureClass::Validation,
-            "adapter.validation".into(),
-            msg.clone(),
-        ),
+        AdapterError::Validation(msg) => (FailureClass::Validation, "adapter.validation".into(), msg.clone()),
         AdapterError::Parse(msg) => (FailureClass::Parse, "adapter.parse".into(), msg.clone()),
-        AdapterError::Unsupported(msg) => (
-            FailureClass::Unsupported,
-            "adapter.unsupported".into(),
-            msg.clone(),
-        ),
+        AdapterError::Unsupported(msg) => (FailureClass::Unsupported, "adapter.unsupported".into(), msg.clone()),
         AdapterError::Io(msg) => {
             let lower = msg.to_ascii_lowercase();
-            if lower.contains("401")
-                || lower.contains("403")
-                || lower.contains("unauthor")
-                || lower.contains("forbidden")
-            {
-                (
-                    FailureClass::Authentication,
-                    "transport.auth".into(),
-                    msg.clone(),
-                )
+            if lower.contains("401") || lower.contains("403") || lower.contains("unauthor") || lower.contains("forbidden") {
+                (FailureClass::Authentication, "transport.auth".into(), msg.clone())
             } else if lower.contains("429") || lower.contains("rate limit") {
-                (
-                    FailureClass::RateLimited,
-                    "transport.rate_limit".into(),
-                    msg.clone(),
-                )
+                (FailureClass::RateLimited, "transport.rate_limit".into(), msg.clone())
             } else if lower.contains("timed out") || lower.contains("timeout") {
-                (
-                    FailureClass::Timeout,
-                    "transport.timeout".into(),
-                    msg.clone(),
-                )
+                (FailureClass::Timeout, "transport.timeout".into(), msg.clone())
             } else {
                 (FailureClass::Network, "transport.io".into(), msg.clone())
             }

@@ -63,9 +63,7 @@ impl Default for EventBufferConfig {
 impl EventBufferConfig {
     pub fn validate(&self) -> Result<(), ValidationError> {
         if self.max_events == 0 {
-            return Err(ValidationError::ZeroCapacity(
-                "observability.max_events".into(),
-            ));
+            return Err(ValidationError::ZeroCapacity("observability.max_events".into()));
         }
         Ok(())
     }

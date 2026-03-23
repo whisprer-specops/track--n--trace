@@ -2,9 +2,9 @@ use std::time::Duration;
 
 use chrono::{TimeDelta, Utc};
 use skeletrace::{
-    AdapterKind, EngineStore, EntityId, MetricDefinition, MetricId, MetricValueType, PollCadence,
-    Quality, RetentionPolicy, Sample, SampleValue, ScheduleEntry, SourceDefinition, SourceHealth,
-    SourceId, SourceKind, SourceSchedule, StoreError, ValidationError,
+    AdapterKind, EntityId, MetricDefinition, MetricId, MetricValueType, PollCadence, Quality,
+    RetentionPolicy, Sample, SampleValue, ScheduleEntry, SourceDefinition, SourceHealth,
+    SourceId, SourceKind, SourceSchedule, StoreError, ValidationError, EngineStore,
 };
 
 fn metric(metric_id: MetricId, source_id: SourceId) -> MetricDefinition {
@@ -103,22 +103,21 @@ fn store_rejects_unknown_metrics_and_prunes_old_history() {
 
     store.register_metric(metric(metric_id, source_id)).unwrap();
     store.ingest_sample(unknown).unwrap();
-    store
-        .ingest_sample(Sample {
-            ts_observed: now + TimeDelta::seconds(10),
-            ts_ingested: now + TimeDelta::seconds(10),
-            value: SampleValue::Numeric(50.0),
-            ..Sample {
-                entity_id,
-                metric_id,
-                ts_observed: now,
-                ts_ingested: now,
-                value: SampleValue::Numeric(42.0),
-                quality: Quality::new(1.0).unwrap(),
-                source_id,
-            }
-        })
-        .unwrap();
+    store.ingest_sample(Sample {
+        ts_observed: now + TimeDelta::seconds(10),
+        ts_ingested: now + TimeDelta::seconds(10),
+        value: SampleValue::Numeric(50.0),
+        ..Sample {
+            entity_id,
+            metric_id,
+            ts_observed: now,
+            ts_ingested: now,
+            value: SampleValue::Numeric(42.0),
+            quality: Quality::new(1.0).unwrap(),
+            source_id,
+        }
+    })
+    .unwrap();
 
     assert_eq!(store.stats().retained_sample_count, 2);
     store.prune_retained_samples(now + TimeDelta::seconds(121));

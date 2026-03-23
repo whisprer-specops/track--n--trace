@@ -16,8 +16,8 @@ use serde_json::Value;
 use crate::entity::{Boundary, Edge, Node};
 use crate::ingest::{AdapterKind, RawIngestRecord, SourceDefinition};
 use crate::mapping::{EntityMapping, FeedField, SourceMappingConfig, ValueSelector};
-use crate::metric::{MetricDefinition, MetricValueType, Sample, SampleValue};
 use crate::transport::{http_get_text, HttpRequestProfile, TransportError};
+use crate::metric::{MetricDefinition, MetricValueType, Sample, SampleValue};
 use crate::types::{EntityId, MetricId, Quality, SourceId, Timestamp, ValidationError};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -445,15 +445,9 @@ fn build_samples_from_json(
     let mut out = Vec::new();
     for binding in &mapping.metric_bindings {
         let sample_value = match &binding.selector {
-            ValueSelector::LiteralNumeric(v) => {
-                coerce_json_value(&Value::from(*v), binding.value_type)?
-            }
-            ValueSelector::LiteralCode(v) => {
-                coerce_json_value(&Value::from(v.clone()), binding.value_type)?
-            }
-            ValueSelector::LiteralFlag(v) => {
-                coerce_json_value(&Value::from(*v), binding.value_type)?
-            }
+            ValueSelector::LiteralNumeric(v) => coerce_json_value(&Value::from(*v), binding.value_type)?,
+            ValueSelector::LiteralCode(v) => coerce_json_value(&Value::from(v.clone()), binding.value_type)?,
+            ValueSelector::LiteralFlag(v) => coerce_json_value(&Value::from(*v), binding.value_type)?,
             _ => {
                 let Some(value) = resolve_json_selector(item, &binding.selector)? else {
                     if binding.required {
@@ -533,16 +527,11 @@ fn resolve_json_entity(
                     )))
                 }
             };
-            Ok(EntityMapping::deterministic_entity_id(
-                source_id,
-                &discriminator,
-            ))
+            Ok(EntityMapping::deterministic_entity_id(source_id, &discriminator))
         }
-        EntityMapping::FeedField(_) | EntityMapping::FeedGuidOrLink => {
-            Err(AdapterError::Unsupported(
-                "feed entity mapping cannot be used by HTTP JSON adapter".into(),
-            ))
-        }
+        EntityMapping::FeedField(_) | EntityMapping::FeedGuidOrLink => Err(AdapterError::Unsupported(
+            "feed entity mapping cannot be used by HTTP JSON adapter".into(),
+        )),
     }
 }
 
@@ -564,19 +553,13 @@ fn resolve_feed_entity(
                         "feed item lacks guid/link/title for deterministic entity mapping".into(),
                     )
                 })?;
-            Ok(EntityMapping::deterministic_entity_id(
-                source_id,
-                &discriminator,
-            ))
+            Ok(EntityMapping::deterministic_entity_id(source_id, &discriminator))
         }
         EntityMapping::FeedField(field) => {
             let discriminator = feed_field_string(item, *field).ok_or_else(|| {
                 AdapterError::Parse(format!("feed field {:?} missing for entity mapping", field))
             })?;
-            Ok(EntityMapping::deterministic_entity_id(
-                source_id,
-                &discriminator,
-            ))
+            Ok(EntityMapping::deterministic_entity_id(source_id, &discriminator))
         }
         EntityMapping::JsonPointer { .. } => Err(AdapterError::Unsupported(
             "JSON pointer entity mapping cannot be used by feed adapter".into(),
@@ -584,10 +567,7 @@ fn resolve_feed_entity(
     }
 }
 
-fn resolve_json_selector<'a>(
-    item: &'a Value,
-    selector: &ValueSelector,
-) -> Result<Option<&'a Value>, AdapterError> {
+fn resolve_json_selector<'a>(item: &'a Value, selector: &ValueSelector) -> Result<Option<&'a Value>, AdapterError> {
     match selector {
         ValueSelector::JsonPointer { pointer } => Ok(item.pointer(pointer)),
         ValueSelector::LiteralNumeric(_)
@@ -599,10 +579,7 @@ fn resolve_json_selector<'a>(
     }
 }
 
-fn resolve_feed_selector(
-    item: &Item,
-    selector: &ValueSelector,
-) -> Result<Option<String>, AdapterError> {
+fn resolve_feed_selector(item: &Item, selector: &ValueSelector) -> Result<Option<String>, AdapterError> {
     match selector {
         ValueSelector::FeedField(field) => Ok(feed_field_string(item, *field)),
         ValueSelector::LiteralNumeric(v) => Ok(Some(v.to_string())),
@@ -694,10 +671,7 @@ fn feed_field_string(item: &Item, field: FeedField) -> Option<String> {
         FeedField::Description => item.description().map(ToOwned::to_owned),
         FeedField::Guid => item.guid().map(|guid| guid.value().to_owned()),
         FeedField::Author => item.author().map(ToOwned::to_owned),
-        FeedField::CategoryFirst => item
-            .categories()
-            .first()
-            .map(|category| category.name().to_owned()),
+        FeedField::CategoryFirst => item.categories().first().map(|category| category.name().to_owned()),
         FeedField::PubDate => item.pub_date().map(ToOwned::to_owned),
     }
 }
@@ -713,3 +687,4 @@ fn feed_item_payload(item: &Item) -> Value {
         "pub_date": item.pub_date(),
     })
 }
+

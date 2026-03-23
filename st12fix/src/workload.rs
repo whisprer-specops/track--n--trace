@@ -51,14 +51,12 @@ impl WorkloadFixture {
     pub fn source_summaries(&self) -> Vec<SourceWorkloadSummary> {
         let mut by_source: HashMap<SourceId, SourceWorkloadSummary> = HashMap::new();
         for batch in &self.batches {
-            let entry = by_source
-                .entry(batch.source_id)
-                .or_insert(SourceWorkloadSummary {
-                    source_id: batch.source_id,
-                    scheduled_pulls: 0,
-                    raw_records: 0,
-                    samples: 0,
-                });
+            let entry = by_source.entry(batch.source_id).or_insert(SourceWorkloadSummary {
+                source_id: batch.source_id,
+                scheduled_pulls: 0,
+                raw_records: 0,
+                samples: 0,
+            });
             entry.scheduled_pulls += 1;
             entry.raw_records += batch.pull.raw_records.len();
             entry.samples += batch.pull.samples.len();

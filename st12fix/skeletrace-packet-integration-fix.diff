@@ -1,0 +1,1071 @@
+diff -ruN /mnt/data/st12fix_orig/st12fix/Cargo.lock /mnt/data/st12fix_work/st12fix/Cargo.lock
+--- /mnt/data/st12fix_orig/st12fix/Cargo.lock	2026-03-23 15:19:48.000000000 +0000
++++ /mnt/data/st12fix_work/st12fix/Cargo.lock	2026-03-23 15:40:12.524965428 +0000
+@@ -279,16 +279,17 @@
+ checksum = "5e5032e24019045c762d3c0f28f5b6b8bbf38563a65908389bf7978758920897"
+ 
+ [[package]]
+-name = "maxwells-demon-detector"
+-version = "0.3.0"
++name = "skeletrace"
++version = "0.11.0"
+ dependencies = [
+- "clap",
+- "crossterm",
+- "csv",
+- "pcap",
+- "rand",
++ "base64",
++ "chrono",
++ "rss",
++ "rusqlite",
+  "serde",
+  "serde_json",
++ "ureq",
++ "uuid",
+ ]
+ 
+ [[package]]
+diff -ruN /mnt/data/st12fix_orig/st12fix/src/lib.rs /mnt/data/st12fix_work/st12fix/src/lib.rs
+--- /mnt/data/st12fix_orig/st12fix/src/lib.rs	2026-03-23 15:26:52.000000000 +0000
++++ /mnt/data/st12fix_work/st12fix/src/lib.rs	2026-03-23 15:40:12.523312616 +0000
+@@ -35,6 +35,7 @@
+ pub mod workload;
+ pub mod query;
+ pub mod lookyloo;
++pub mod packet;
+ 
+ pub use adapter::{
+     AdapterError, FeedPollAdapter, FileSampleRecord, HttpJsonAdapter, ManualPushAdapter,
+@@ -94,3 +95,10 @@
+ pub use query::{AlertEvent, AlertRule, EntityClass, EntitySelector, NumericPredicate, QueryFilter, QueryResult, QueryRow, WatchItem, Watchlist, WatchlistEvaluation};
+ 
+ pub use lookyloo::{LookylooCaptureSummary, LookylooMetricBindings, LookylooSourceConfig, LookylooSummaryAdapter, LookylooTopologyAdapter, LookylooTopologyConfig};
++
++pub use packet::{
++    analyze_packets, render_packet_landscape_frame, verify_packet_events, PacketEvent,
++    PacketLandscapeOptions, PacketLane, PacketLaneSummary, PacketLandscapeState,
++    PacketVerificationReport, PacketVerificationRequest, PacketVerificationResponse,
++    PacketVerificationSummary,
++};
+diff -ruN /mnt/data/st12fix_orig/st12fix/src/main.rs /mnt/data/st12fix_work/st12fix/src/main.rs
+--- /mnt/data/st12fix_orig/st12fix/src/main.rs	2026-03-23 15:15:53.000000000 +0000
++++ /mnt/data/st12fix_work/st12fix/src/main.rs	1970-01-01 00:00:00.000000000 +0000
+@@ -1,111 +0,0 @@
+-#[cfg(feature = "tui")]
+-use std::error::Error;
+-#[cfg(feature = "tui")]
+-use std::io::{stdout, Write};
+-#[cfg(feature = "tui")]
+-use std::time::{Duration, Instant};
+-
+-#[cfg(feature = "tui")]
+-use clap::Parser;
+-#[cfg(feature = "tui")]
+-use crossterm::cursor::{Hide, Show};
+-#[cfg(feature = "tui")]
+-use crossterm::event::{poll, read, Event as CEvent, KeyCode};
+-#[cfg(feature = "tui")]
+-use crossterm::execute;
+-#[cfg(feature = "tui")]
+-use crossterm::terminal::{self, EnterAlternateScreen, LeaveAlternateScreen};
+-
+-#[cfg(feature = "tui")]
+-use maxwells_demon_detector::cli::{Cli, Mode};
+-#[cfg(feature = "tui")]
+-use maxwells_demon_detector::model::AppState;
+-#[cfg(feature = "tui")]
+-use maxwells_demon_detector::{render, source};
+-
+-#[cfg(feature = "tui")]
+-struct TerminalGuard;
+-
+-#[cfg(feature = "tui")]
+-impl TerminalGuard {
+-    fn enter() -> Result<Self, Box<dyn Error>> {
+-        terminal::enable_raw_mode()?;
+-        execute!(stdout(), EnterAlternateScreen, Hide)?;
+-        Ok(Self)
+-    }
+-}
+-
+-#[cfg(feature = "tui")]
+-impl Drop for TerminalGuard {
+-    fn drop(&mut self) {
+-        let _ = execute!(stdout(), Show, LeaveAlternateScreen);
+-        let _ = terminal::disable_raw_mode();
+-    }
+-}
+-
+-#[cfg(feature = "tui")]
+-fn maybe_quit() -> Result<bool, Box<dyn Error>> {
+-    while poll(Duration::from_millis(0))? {
+-        if let CEvent::Key(key) = read()? {
+-            if matches!(key.code, KeyCode::Char('q') | KeyCode::Esc) {
+-                return Ok(true);
+-            }
+-        }
+-    }
+-    Ok(false)
+-}
+-
+-#[cfg(feature = "tui")]
+-fn main() -> Result<(), Box<dyn Error>> {
+-    let cli = Cli::parse();
+-
+-    if cli.mode == Mode::ListInterfaces {
+-        source::print_interfaces()?;
+-        return Ok(());
+-    }
+-
+-    let mut source = source::build_source(&cli)?;
+-    let _guard = TerminalGuard::enter()?;
+-
+-    let (term_w, _) = terminal::size()?;
+-    let width = cli
+-        .width
+-        .unwrap_or_else(|| term_w.saturating_sub(24).max(32) as usize);
+-
+-    let mut state = AppState::new(width, cli.tick_ms, cli.max_alerts);
+-    let tick = Duration::from_millis(cli.tick_ms.max(1));
+-
+-    let mut last_tick = Instant::now();
+-    let mut stdout = stdout();
+-
+-    loop {
+-        if maybe_quit()? {
+-            break;
+-        }
+-
+-        let now = Instant::now();
+-        let elapsed = now.saturating_duration_since(last_tick);
+-        let budget = elapsed.min(tick.saturating_mul(4));
+-        let events = source.poll(budget)?;
+-        for ev in events {
+-            state.ingest(ev);
+-        }
+-
+-        if elapsed >= tick {
+-            state.finalize_tick();
+-            render::draw(&mut stdout, &state, cli.mode.label())?;
+-            stdout.flush()?;
+-            last_tick = now;
+-        } else {
+-            std::thread::sleep(tick - elapsed);
+-        }
+-    }
+-
+-    Ok(())
+-}
+-
+-#[cfg(not(feature = "tui"))]
+-fn main() {
+-    eprintln!("The terminal application target requires the `tui` feature. Build with default features or enable `tui`.");
+-    std::process::exit(1);
+-}
+diff -ruN /mnt/data/st12fix_orig/st12fix/src/operator.rs /mnt/data/st12fix_work/st12fix/src/operator.rs
+--- /mnt/data/st12fix_orig/st12fix/src/operator.rs	2026-03-23 15:26:52.000000000 +0000
++++ /mnt/data/st12fix_work/st12fix/src/operator.rs	2026-03-23 15:41:38.921493300 +0000
+@@ -13,6 +13,7 @@
+ use crate::metric::{MetricRetentionReport, RetentionTuning};
+ use crate::observability::EngineEvent;
+ use crate::profiling::{DurationStats, EngineHealthReport, PerfProbeConfig, PerfProbeReport};
++use crate::packet::{analyze_packets, PacketEvent, PacketLandscapeOptions, PacketVerificationRequest, PacketVerificationResponse};
+ use crate::profile::{EngineProfile, ProfileError};
+ use crate::query::{QueryFilter, QueryResult, Watchlist, WatchlistEvaluation};
+ use crate::types::{EntityId, MetricId, SourceId, Timestamp, ValidationError};
+@@ -250,6 +251,9 @@
+             OperatorRequest::BenchmarkReplayWorkload { fixture, request, now } => {
+                 OperatorResponse::ReplayBenchmark(self.benchmark_replay_workload(&fixture, &request, now)?)
+             }
++            OperatorRequest::VerifyPackets { request } => {
++                OperatorResponse::PacketVerification(analyze_packets(request)?)
++            }
+         })
+     }
+ }
+@@ -301,6 +305,9 @@
+         request: ReplayBenchmarkRequest,
+         now: Timestamp,
+     },
++    VerifyPackets {
++        request: PacketVerificationRequest,
++    },
+ }
+ 
+ #[derive(Debug, Clone, Serialize, Deserialize)]
+@@ -323,6 +330,7 @@
+     WarmStoreReport(Option<WarmStoreMaintenanceReport>),
+     Workload(WorkloadRunReport),
+     ReplayBenchmark(ReplayBenchmarkReport),
++    PacketVerification(PacketVerificationResponse),
+ }
+ 
+ #[derive(Debug, Clone, PartialEq, Eq)]
+@@ -336,6 +344,7 @@
+     QueryLatest { profile_path: PathBuf, filter_path: PathBuf },
+     EvaluateWatchlist { profile_path: PathBuf, watchlist_path: PathBuf },
+     Health { profile_path: PathBuf },
++    VerifyPackets { input_path: PathBuf },
+ }
+ 
+ impl CliCommand {
+@@ -384,6 +393,9 @@
+             "health" if values.len() == 3 => Ok(Self::Health {
+                 profile_path: PathBuf::from(&values[2]),
+             }),
++            "verify-packets" if values.len() == 3 => Ok(Self::VerifyPackets {
++                input_path: PathBuf::from(&values[2]),
++            }),
+             other => Err(OperatorError::Cli(format!("unsupported or malformed command `{other}`"))),
+         }
+     }
+@@ -485,7 +497,52 @@
+             let mut api = OperatorApi::from_profile(&profile, exporter, now)?;
+             api.execute(OperatorRequest::HealthReport { now })
+         }
++        CliCommand::VerifyPackets { input_path } => {
++            let events = load_packet_events(input_path)?;
++            let request = PacketVerificationRequest {
++                events,
++                options: PacketLandscapeOptions {
++                    mode_label: "verify-packets".into(),
++                    ..PacketLandscapeOptions::default()
++                },
++            };
++            Ok(OperatorResponse::PacketVerification(analyze_packets(request)?))
++        }
++    }
++}
++
++
++fn load_packet_events(path: PathBuf) -> Result<Vec<PacketEvent>, OperatorError> {
++    let bytes = fs::read(path).map_err(|err| OperatorError::Io(err.to_string()))?;
++    let text = std::str::from_utf8(&bytes)
++        .map_err(|err| OperatorError::Serde(err.to_string()))?;
++    let trimmed = text.trim();
++    if trimmed.is_empty() {
++        return Ok(Vec::new());
++    }
++
++    if trimmed.starts_with('[') {
++        return serde_json::from_str(trimmed)
++            .map_err(|err| OperatorError::Serde(err.to_string()));
++    }
++
++    if trimmed.starts_with('{') {
++        if let Ok(single) = serde_json::from_str::<PacketEvent>(trimmed) {
++            return Ok(vec![single]);
++        }
++    }
++
++    let mut events = Vec::new();
++    for (idx, line) in text.lines().enumerate() {
++        let line = line.trim();
++        if line.is_empty() {
++            continue;
++        }
++        let event = serde_json::from_str::<PacketEvent>(line)
++            .map_err(|err| OperatorError::Serde(format!("invalid packet event at line {}: {err}", idx + 1)))?;
++        events.push(event);
+     }
++    Ok(events)
+ }
+ 
+ fn load_json<T: for<'de> Deserialize<'de>>(path: PathBuf) -> Result<T, OperatorError> {
+diff -ruN /mnt/data/st12fix_orig/st12fix/src/packet/event.rs /mnt/data/st12fix_work/st12fix/src/packet/event.rs
+--- /mnt/data/st12fix_orig/st12fix/src/packet/event.rs	1970-01-01 00:00:00.000000000 +0000
++++ /mnt/data/st12fix_work/st12fix/src/packet/event.rs	2026-03-23 15:40:12.521535224 +0000
+@@ -0,0 +1,110 @@
++use serde::{Deserialize, Serialize};
++
++#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
++pub struct PacketEvent {
++    #[serde(default)]
++    pub ts_ms: Option<u64>,
++    pub len: usize,
++    #[serde(default)]
++    pub proto: String,
++    #[serde(default)]
++    pub src: Option<String>,
++    #[serde(default)]
++    pub dst: Option<String>,
++    #[serde(default)]
++    pub sport: Option<u16>,
++    #[serde(default)]
++    pub dport: Option<u16>,
++    #[serde(default)]
++    pub dir: Option<String>,
++}
++
++#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
++pub enum Lane {
++    Web,
++    Dns,
++    Mail,
++    Media,
++    Control,
++    Bulk,
++    Other,
++}
++
++impl Lane {
++    pub const ALL: [Lane; 7] = [
++        Lane::Web,
++        Lane::Dns,
++        Lane::Mail,
++        Lane::Media,
++        Lane::Control,
++        Lane::Bulk,
++        Lane::Other,
++    ];
++
++    #[must_use]
++    pub const fn label(self) -> &'static str {
++        match self {
++            Lane::Web => "WEB",
++            Lane::Dns => "DNS",
++            Lane::Mail => "MAIL",
++            Lane::Media => "MEDIA",
++            Lane::Control => "CTRL",
++            Lane::Bulk => "BULK",
++            Lane::Other => "OTHER",
++        }
++    }
++}
++
++impl PacketEvent {
++    #[must_use]
++    pub fn lane(&self) -> Lane {
++        let proto = self.proto.to_ascii_lowercase();
++        let ports = [self.sport, self.dport];
++
++        let has_port = |needle: u16| ports.iter().flatten().any(|p| *p == needle);
++        let has_any = |needles: &[u16]| needles.iter().any(|n| has_port(*n));
++
++        if has_port(53) || proto.contains("dns") {
++            return Lane::Dns;
++        }
++        if has_any(&[80, 443, 8080, 8443])
++            || ["http", "https", "tls", "quic", "ws", "wss"]
++                .iter()
++                .any(|s| proto.contains(s))
++        {
++            return Lane::Web;
++        }
++        if has_any(&[25, 110, 143, 465, 587, 993, 995])
++            || ["smtp", "imap", "pop3", "mail"]
++                .iter()
++                .any(|s| proto.contains(s))
++        {
++            return Lane::Mail;
++        }
++        if has_any(&[3478, 3479, 5004, 5005, 554, 1935, 5060, 5061])
++            || [
++                "rtp", "rtcp", "sip", "rtsp", "webrtc", "video", "audio", "stun",
++            ]
++            .iter()
++            .any(|s| proto.contains(s))
++        {
++            return Lane::Media;
++        }
++        if has_any(&[22, 23, 123, 161, 162, 445, 3389])
++            || ["ssh", "icmp", "ntp", "snmp", "rdp", "smb", "control"]
++                .iter()
++                .any(|s| proto.contains(s))
++        {
++            return Lane::Control;
++        }
++        if self.len >= 1200
++            || has_any(&[20, 21, 989, 990])
++            || ["ftp", "bulk", "file", "arp"]
++                .iter()
++                .any(|s| proto.contains(s))
++        {
++            return Lane::Bulk;
++        }
++        Lane::Other
++    }
++}
+diff -ruN /mnt/data/st12fix_orig/st12fix/src/packet/mod.rs /mnt/data/st12fix_work/st12fix/src/packet/mod.rs
+--- /mnt/data/st12fix_orig/st12fix/src/packet/mod.rs	1970-01-01 00:00:00.000000000 +0000
++++ /mnt/data/st12fix_work/st12fix/src/packet/mod.rs	2026-03-23 15:41:38.920795930 +0000
+@@ -0,0 +1,139 @@
++use serde::{Deserialize, Serialize};
++
++use crate::types::ValidationError;
++
++pub mod event;
++pub mod model;
++pub mod render;
++pub mod stats;
++pub mod verify;
++
++pub use event::{Lane as PacketLane, PacketEvent};
++pub use model::AppState as PacketLandscapeState;
++pub use render::frame_string as render_packet_landscape_frame;
++pub use verify::{verify_events as verify_packet_events, LaneSummary as PacketLaneSummary, VerificationReport as PacketVerificationReport};
++
++#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
++pub struct PacketLandscapeOptions {
++    pub width: usize,
++    pub tick_ms: u64,
++    pub max_alerts: usize,
++    pub mode_label: String,
++    pub render_frame: bool,
++}
++
++impl Default for PacketLandscapeOptions {
++    fn default() -> Self {
++        Self {
++            width: 96,
++            tick_ms: 250,
++            max_alerts: 16,
++            mode_label: "packet-verify".into(),
++            render_frame: true,
++        }
++    }
++}
++
++impl PacketLandscapeOptions {
++    pub fn validate(&self) -> Result<(), ValidationError> {
++        if self.width == 0 {
++            return Err(ValidationError::ZeroCapacity("packet.width".into()));
++        }
++        if self.tick_ms == 0 {
++            return Err(ValidationError::ZeroCapacity("packet.tick_ms".into()));
++        }
++        if self.max_alerts == 0 {
++            return Err(ValidationError::ZeroCapacity("packet.max_alerts".into()));
++        }
++        if self.mode_label.trim().is_empty() {
++            return Err(ValidationError::EmptyField("packet.mode_label".into()));
++        }
++        Ok(())
++    }
++}
++
++#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
++pub struct PacketVerificationRequest {
++    pub events: Vec<PacketEvent>,
++    pub options: PacketLandscapeOptions,
++}
++
++impl PacketVerificationRequest {
++    pub fn validate(&self) -> Result<(), ValidationError> {
++        self.options.validate()
++    }
++}
++
++#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
++pub struct PacketVerificationSummary {
++    pub ticks: usize,
++    pub total_events: u64,
++    pub total_bytes: u64,
++    pub alerts: Vec<String>,
++    pub lanes: Vec<PacketLaneSummaryRecord>,
++    pub width: usize,
++    pub tick_ms: u64,
++    pub mode_label: String,
++}
++
++#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
++pub struct PacketLaneSummaryRecord {
++    pub lane: PacketLane,
++    pub lane_label: String,
++    pub total_events: u64,
++    pub total_bytes: u64,
++    pub anomaly_buckets: u64,
++    pub max_score: f64,
++    pub max_entropy: f64,
++}
++
++#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
++pub struct PacketVerificationResponse {
++    pub summary: PacketVerificationSummary,
++    pub ascii_frame: Option<String>,
++}
++
++pub fn analyze_packets(
++    request: PacketVerificationRequest,
++) -> Result<PacketVerificationResponse, ValidationError> {
++    request.validate()?;
++    let report = verify::verify_events(
++        request.events,
++        request.options.width,
++        request.options.tick_ms,
++        request.options.max_alerts,
++    );
++
++    let summary = PacketVerificationSummary {
++        ticks: report.ticks,
++        total_events: report.total_events,
++        total_bytes: report.total_bytes,
++        alerts: report.alerts.clone(),
++        lanes: report
++            .lanes
++            .iter()
++            .map(|lane| PacketLaneSummaryRecord {
++                lane: lane.lane,
++                lane_label: lane.lane.label().to_string(),
++                total_events: lane.total_events,
++                total_bytes: lane.total_bytes,
++                anomaly_buckets: lane.anomaly_buckets,
++                max_score: lane.max_score,
++                max_entropy: lane.max_entropy,
++            })
++            .collect(),
++        width: request.options.width,
++        tick_ms: request.options.tick_ms,
++        mode_label: request.options.mode_label.clone(),
++    };
++
++    let ascii_frame = request
++        .options
++        .render_frame
++        .then(|| render::frame_string(&report.state, &request.options.mode_label));
++
++    Ok(PacketVerificationResponse {
++        summary,
++        ascii_frame,
++    })
++}
+diff -ruN /mnt/data/st12fix_orig/st12fix/src/packet/model.rs /mnt/data/st12fix_work/st12fix/src/packet/model.rs
+--- /mnt/data/st12fix_orig/st12fix/src/packet/model.rs	1970-01-01 00:00:00.000000000 +0000
++++ /mnt/data/st12fix_work/st12fix/src/packet/model.rs	2026-03-23 15:40:12.522029229 +0000
+@@ -0,0 +1,209 @@
++use std::collections::VecDeque;
++
++use crate::packet::event::{Lane, PacketEvent};
++use crate::packet::stats::{mean, normalized_entropy, stddev};
++
++const SIZE_BINS: usize = 6;
++const GLYPHS: &[u8] = b" .,:;ox%#@";
++const Z_WINDOW: usize = 24;
++
++#[derive(Debug, Clone)]
++pub struct Cell {
++    pub count: u64,
++    pub bytes: u64,
++    pub entropy: f64,
++    pub score: f64,
++    pub anomaly: bool,
++}
++
++impl Cell {
++    #[must_use]
++    pub fn empty() -> Self {
++        Self {
++            count: 0,
++            bytes: 0,
++            entropy: 0.0,
++            score: 0.0,
++            anomaly: false,
++        }
++    }
++
++    #[must_use]
++    pub fn glyph(&self) -> char {
++        if self.anomaly && self.count > 0 {
++            return '!';
++        }
++        let idx = (self.score.clamp(0.0, 0.999) * (GLYPHS.len() as f64)) as usize;
++        GLYPHS[idx.min(GLYPHS.len() - 1)] as char
++    }
++}
++
++#[derive(Debug, Clone)]
++struct Bucket {
++    count: u64,
++    bytes: u64,
++    size_bins: [u64; SIZE_BINS],
++}
++
++impl Bucket {
++    fn new() -> Self {
++        Self {
++            count: 0,
++            bytes: 0,
++            size_bins: [0; SIZE_BINS],
++        }
++    }
++
++    fn add(&mut self, ev: &PacketEvent) {
++        self.count += 1;
++        self.bytes += ev.len as u64;
++        let idx = match ev.len {
++            0..=63 => 0,
++            64..=127 => 1,
++            128..=255 => 2,
++            256..=511 => 3,
++            512..=1023 => 4,
++            _ => 5,
++        };
++        self.size_bins[idx] += 1;
++    }
++
++    fn entropy(&self) -> f64 {
++        normalized_entropy(&self.size_bins)
++    }
++}
++
++#[derive(Debug, Clone)]
++pub struct AppState {
++    pub width: usize,
++    pub tick_ms: u64,
++    pub started_at: std::time::Instant,
++    pub total_events: u64,
++    pub total_bytes: u64,
++    pub lanes: Vec<Lane>,
++    pub history: Vec<VecDeque<Cell>>,
++    buckets: Vec<Bucket>,
++    score_history: Vec<VecDeque<f64>>,
++    pub alerts: VecDeque<String>,
++    pub max_alerts: usize,
++    pub last_tick_count: u64,
++}
++
++impl AppState {
++    #[must_use]
++    pub fn new(width: usize, tick_ms: u64, max_alerts: usize) -> Self {
++        let width = width.max(8);
++        let tick_ms = tick_ms.max(1);
++        let lanes = Lane::ALL.to_vec();
++        let history = lanes
++            .iter()
++            .map(|_| {
++                let mut row = VecDeque::with_capacity(width);
++                for _ in 0..width {
++                    row.push_back(Cell::empty());
++                }
++                row
++            })
++            .collect();
++        let buckets = lanes.iter().map(|_| Bucket::new()).collect();
++        let score_history = lanes
++            .iter()
++            .map(|_| VecDeque::with_capacity(Z_WINDOW))
++            .collect();
++        Self {
++            width,
++            tick_ms,
++            started_at: std::time::Instant::now(),
++            total_events: 0,
++            total_bytes: 0,
++            lanes,
++            history,
++            buckets,
++            score_history,
++            alerts: VecDeque::new(),
++            max_alerts: max_alerts.max(1),
++            last_tick_count: 0,
++        }
++    }
++
++    #[must_use]
++    pub fn lane_index(&self, lane: Lane) -> usize {
++        self.lanes
++            .iter()
++            .position(|l| *l == lane)
++            .unwrap_or(self.lanes.len().saturating_sub(1))
++    }
++
++    pub fn ingest(&mut self, ev: PacketEvent) {
++        let lane = ev.lane();
++        let idx = self.lane_index(lane);
++        self.buckets[idx].add(&ev);
++        self.total_events += 1;
++        self.total_bytes += ev.len as u64;
++        self.last_tick_count += 1;
++    }
++
++    pub fn finalize_tick(&mut self) {
++        for i in 0..self.lanes.len() {
++            let bucket = std::mem::replace(&mut self.buckets[i], Bucket::new());
++            let entropy = bucket.entropy();
++            let load_term = ((bucket.count as f64 + 1.0).ln() / 4.0).clamp(0.0, 1.0);
++            let score = (0.55 * load_term) + (0.45 * entropy);
++
++            let baseline: Vec<f64> = self.score_history[i].iter().copied().collect();
++            let mu = mean(&baseline);
++            let sd = stddev(&baseline, mu).max(0.08);
++            let z = if baseline.len() >= 6 {
++                (score - mu) / sd
++            } else {
++                0.0
++            };
++            let anomaly = bucket.count >= 8 && z >= 2.6;
++
++            let cell = Cell {
++                count: bucket.count,
++                bytes: bucket.bytes,
++                entropy,
++                score: score.clamp(0.0, 1.0),
++                anomaly,
++            };
++            let row = &mut self.history[i];
++            if row.len() >= self.width {
++                row.pop_front();
++            }
++            row.push_back(cell.clone());
++
++            let sh = &mut self.score_history[i];
++            if sh.len() >= Z_WINDOW {
++                sh.pop_front();
++            }
++            sh.push_back(score);
++
++            if anomaly {
++                let line = format!(
++                    "{} spike: count={} bytes={} entropy={:.2} z={:.2}",
++                    self.lanes[i].label(),
++                    cell.count,
++                    cell.bytes,
++                    cell.entropy,
++                    z,
++                );
++                self.alerts.push_front(line);
++                while self.alerts.len() > self.max_alerts {
++                    self.alerts.pop_back();
++                }
++            }
++        }
++        self.last_tick_count = 0;
++    }
++
++    #[must_use]
++    pub fn uptime_secs(&self) -> u64 {
++        self.started_at.elapsed().as_secs()
++    }
++
++    #[must_use]
++    pub fn current_cell(&self, idx: usize) -> Option<&Cell> {
++        self.history.get(idx).and_then(|row| row.back())
++    }
++}
+diff -ruN /mnt/data/st12fix_orig/st12fix/src/packet/render.rs /mnt/data/st12fix_work/st12fix/src/packet/render.rs
+--- /mnt/data/st12fix_orig/st12fix/src/packet/render.rs	1970-01-01 00:00:00.000000000 +0000
++++ /mnt/data/st12fix_work/st12fix/src/packet/render.rs	2026-03-23 15:40:12.522196474 +0000
+@@ -0,0 +1,76 @@
++use crate::packet::model::AppState;
++
++#[must_use]
++pub fn frame_string(state: &AppState, mode_label: &str) -> String {
++    let bytes_per_sec = if state.uptime_secs() > 0 {
++        state.total_bytes / state.uptime_secs()
++    } else {
++        0
++    };
++    let events_per_sec = if state.uptime_secs() > 0 {
++        state.total_events / state.uptime_secs()
++    } else {
++        0
++    };
++
++    let mut out = String::new();
++    out.push_str("[2J[H");
++    out.push_str(&format!(
++        "Packet Flow Landscape  |  mode={}  |  tick={}ms
++",
++        mode_label, state.tick_ms
++    ));
++    out.push_str(&format!(
++        "events={}  bytes={}  approx_eps={}  approx_Bps={}  uptime={}s
++",
++        state.total_events,
++        state.total_bytes,
++        events_per_sec,
++        bytes_per_sec,
++        state.uptime_secs()
++    ));
++    out.push_str(
++        "Each cell is one time bucket. Glyph intensity blends load and packet-size entropy. ! = anomalous bucket.
++
++",
++    );
++
++    for (i, lane) in state.lanes.iter().enumerate() {
++        let row = &state.history[i];
++        let mut line = String::with_capacity(row.len());
++        for cell in row {
++            line.push(cell.glyph());
++        }
++        let tail = state
++            .current_cell(i)
++            .map(|c| {
++                format!(
++                    " count={:<4} bytes={:<6} H={:.2}",
++                    c.count, c.bytes, c.entropy
++                )
++            })
++            .unwrap_or_default();
++        out.push_str(&format!("{:<6} {}{}
++", lane.label(), line, tail));
++    }
++
++    out.push_str(
++        "
++Legend: ' ' quiet  .,:; medium  o x % # @ heavy/structured  ! anomaly
++
++",
++    );
++    out.push_str("Recent alerts:
++");
++    if state.alerts.is_empty() {
++        out.push_str("  (none yet)
++");
++    } else {
++        for line in state.alerts.iter().take(state.max_alerts) {
++            out.push_str(&format!("  - {}
++", line));
++        }
++    }
++
++    out
++}
+diff -ruN /mnt/data/st12fix_orig/st12fix/src/packet/stats.rs /mnt/data/st12fix_work/st12fix/src/packet/stats.rs
+--- /mnt/data/st12fix_orig/st12fix/src/packet/stats.rs	1970-01-01 00:00:00.000000000 +0000
++++ /mnt/data/st12fix_work/st12fix/src/packet/stats.rs	2026-03-23 15:40:12.521818912 +0000
+@@ -0,0 +1,54 @@
++#[must_use]
++pub fn shannon_entropy_u64(counts: &[u64]) -> f64 {
++    let total: u64 = counts.iter().sum();
++    if total == 0 {
++        return 0.0;
++    }
++    let total_f = total as f64;
++    counts
++        .iter()
++        .filter(|&&c| c > 0)
++        .map(|&c| {
++            let p = c as f64 / total_f;
++            -p * p.log2()
++        })
++        .sum()
++}
++
++#[must_use]
++pub fn mean(values: &[f64]) -> f64 {
++    if values.is_empty() {
++        return 0.0;
++    }
++    values.iter().sum::<f64>() / values.len() as f64
++}
++
++#[must_use]
++pub fn stddev(values: &[f64], mu: f64) -> f64 {
++    if values.len() < 2 {
++        return 0.0;
++    }
++    let var = values
++        .iter()
++        .map(|v| {
++            let d = *v - mu;
++            d * d
++        })
++        .sum::<f64>()
++        / values.len() as f64;
++    var.sqrt()
++}
++
++#[must_use]
++pub fn normalized_entropy(counts: &[u64]) -> f64 {
++    if counts.len() < 2 {
++        return 0.0;
++    }
++    let h = shannon_entropy_u64(counts);
++    let max_h = (counts.len() as f64).log2();
++    if max_h <= 0.0 {
++        0.0
++    } else {
++        (h / max_h).clamp(0.0, 1.0)
++    }
++}
+diff -ruN /mnt/data/st12fix_orig/st12fix/src/packet/verify.rs /mnt/data/st12fix_work/st12fix/src/packet/verify.rs
+--- /mnt/data/st12fix_orig/st12fix/src/packet/verify.rs	1970-01-01 00:00:00.000000000 +0000
++++ /mnt/data/st12fix_work/st12fix/src/packet/verify.rs	2026-03-23 15:40:12.522292567 +0000
+@@ -0,0 +1,97 @@
++use crate::packet::event::{Lane, PacketEvent};
++use crate::packet::model::AppState;
++
++#[derive(Debug, Clone)]
++pub struct LaneSummary {
++    pub lane: Lane,
++    pub total_events: u64,
++    pub total_bytes: u64,
++    pub anomaly_buckets: u64,
++    pub max_score: f64,
++    pub max_entropy: f64,
++}
++
++#[derive(Debug, Clone)]
++pub struct VerificationReport {
++    pub ticks: usize,
++    pub total_events: u64,
++    pub total_bytes: u64,
++    pub alerts: Vec<String>,
++    pub lanes: Vec<LaneSummary>,
++    pub state: AppState,
++}
++
++#[must_use]
++pub fn verify_events<I>(
++    events: I,
++    width: usize,
++    tick_ms: u64,
++    max_alerts: usize,
++) -> VerificationReport
++where
++    I: IntoIterator<Item = PacketEvent>,
++{
++    let tick_ms = tick_ms.max(1);
++    let mut state = AppState::new(width, tick_ms, max_alerts);
++    let mut lanes = state
++        .lanes
++        .iter()
++        .copied()
++        .map(|lane| LaneSummary {
++            lane,
++            total_events: 0,
++            total_bytes: 0,
++            anomaly_buckets: 0,
++            max_score: 0.0,
++            max_entropy: 0.0,
++        })
++        .collect::<Vec<_>>();
++
++    let mut ticks = 0usize;
++    let mut current_bucket: Option<u64> = None;
++
++    for ev in events {
++        if let Some(ts_ms) = ev.ts_ms {
++            let bucket = ts_ms / tick_ms;
++            match current_bucket {
++                Some(cur) if bucket != cur => {
++                    if state.last_tick_count > 0 {
++                        state.finalize_tick();
++                        ticks += 1;
++                    }
++                    current_bucket = Some(bucket);
++                }
++                None => current_bucket = Some(bucket),
++                _ => {}
++            }
++        }
++
++        let lane = ev.lane();
++        let idx = state.lane_index(lane);
++        lanes[idx].total_events += 1;
++        lanes[idx].total_bytes += ev.len as u64;
++        state.ingest(ev);
++    }
++
++    if state.last_tick_count > 0 {
++        state.finalize_tick();
++        ticks += 1;
++    }
++
++    for (idx, row) in state.history.iter().enumerate() {
++        lanes[idx].anomaly_buckets = row.iter().filter(|cell| cell.anomaly).count() as u64;
++        lanes[idx].max_score = row.iter().map(|cell| cell.score).fold(0.0, f64::max);
++        lanes[idx].max_entropy = row.iter().map(|cell| cell.entropy).fold(0.0, f64::max);
++    }
++
++    let alerts = state.alerts.iter().cloned().collect::<Vec<_>>();
++
++    VerificationReport {
++        ticks,
++        total_events: state.total_events,
++        total_bytes: state.total_bytes,
++        alerts,
++        lanes,
++        state,
++    }
++}
+diff -ruN /mnt/data/st12fix_orig/st12fix/tests/integration_embedding.rs /mnt/data/st12fix_work/st12fix/tests/integration_embedding.rs
+--- /mnt/data/st12fix_orig/st12fix/tests/integration_embedding.rs	2026-03-23 15:19:39.000000000 +0000
++++ /mnt/data/st12fix_work/st12fix/tests/integration_embedding.rs	2026-03-23 15:41:38.921836079 +0000
+@@ -1,6 +1,4 @@
+-use maxwells_demon_detector::event::{Lane, PacketEvent};
+-use maxwells_demon_detector::render::frame_string;
+-use maxwells_demon_detector::verify::verify_events;
++use skeletrace::{analyze_packets, render_packet_landscape_frame, verify_packet_events, PacketEvent, PacketLandscapeOptions, PacketLane, PacketVerificationRequest};
+ 
+ fn event(
+     ts_ms: u64,
+@@ -25,13 +23,13 @@
+ fn lane_classification_prefers_dns_and_web_ports() {
+     let dns = event(0, 96, "udp", Some(54000), Some(53));
+     let web = event(0, 512, "tcp", Some(51000), Some(443));
+-    assert_eq!(dns.lane(), Lane::Dns);
+-    assert_eq!(web.lane(), Lane::Web);
++    assert_eq!(dns.lane(), PacketLane::Dns);
++    assert_eq!(web.lane(), PacketLane::Web);
+ }
+ 
+ #[test]
+ fn verify_groups_events_into_ticks_and_preserves_renderability() {
+-    let report = verify_events(
++    let report = verify_packet_events(
+         vec![
+             event(0, 96, "udp", Some(54000), Some(53)),
+             event(50, 512, "tcp", Some(51000), Some(443)),
+@@ -49,17 +47,17 @@
+     let dns = report
+         .lanes
+         .iter()
+-        .find(|lane| lane.lane == Lane::Dns)
++        .find(|lane| lane.lane == PacketLane::Dns)
+         .unwrap();
+     let web = report
+         .lanes
+         .iter()
+-        .find(|lane| lane.lane == Lane::Web)
++        .find(|lane| lane.lane == PacketLane::Web)
+         .unwrap();
+     assert_eq!(dns.total_events, 1);
+     assert_eq!(web.total_events, 2);
+ 
+-    let frame = frame_string(&report.state, "verify");
++    let frame = render_packet_landscape_frame(&report.state, "verify");
+     assert!(frame.contains("WEB"));
+     assert!(frame.contains("DNS"));
+     assert!(frame.contains("mode=verify"));
+@@ -75,12 +73,35 @@
+         events.push(event(700, 64, "tcp", Some(50000), Some(443)));
+     }
+ 
+-    let report = verify_events(events, 24, 100, 8);
++    let report = verify_packet_events(events, 24, 100, 8);
+     let web = report
+         .lanes
+         .iter()
+-        .find(|lane| lane.lane == Lane::Web)
++        .find(|lane| lane.lane == PacketLane::Web)
+         .unwrap();
+     assert!(web.anomaly_buckets >= 1);
+     assert!(!report.alerts.is_empty());
+ }
++
++
++#[test]
++fn analyze_packets_returns_optional_ascii_frame() {
++    let request = PacketVerificationRequest {
++        events: vec![
++            event(0, 96, "udp", Some(54000), Some(53)),
++            event(100, 512, "tcp", Some(51000), Some(443)),
++        ],
++        options: PacketLandscapeOptions {
++            width: 24,
++            tick_ms: 100,
++            max_alerts: 8,
++            mode_label: "operator".into(),
++            render_frame: true,
++        },
++    };
++
++    let response = analyze_packets(request).unwrap();
++    assert_eq!(response.summary.total_events, 2);
++    assert_eq!(response.summary.tick_ms, 100);
++    assert!(response.ascii_frame.as_ref().is_some_and(|frame| frame.contains("mode=operator")));
++}

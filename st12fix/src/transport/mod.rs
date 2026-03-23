@@ -317,15 +317,15 @@ mod tests {
 
     #[test]
     fn extract_domain_https() {
-        assert_eq!(
-            extract_domain("https://api.example.com/v1"),
-            "api.example.com"
-        );
+        assert_eq!(extract_domain("https://api.example.com/v1"), "api.example.com");
     }
 
     #[test]
     fn extract_domain_with_port() {
-        assert_eq!(extract_domain("http://localhost:8080/health"), "localhost");
+        assert_eq!(
+            extract_domain("http://localhost:8080/health"),
+            "localhost"
+        );
     }
 
     #[test]

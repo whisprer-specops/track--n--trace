@@ -29,9 +29,7 @@ impl EntitySelector {
     pub fn validate(&self) -> Result<(), ValidationError> {
         if let Some(value) = &self.label_contains {
             if value.trim().is_empty() {
-                return Err(ValidationError::EmptyField(
-                    "entity_selector.label_contains".into(),
-                ));
+                return Err(ValidationError::EmptyField("entity_selector.label_contains".into()));
             }
         }
         Ok(())
@@ -41,11 +39,7 @@ impl EntitySelector {
     pub fn matches_label(&self, label: &str) -> bool {
         self.label_contains
             .as_ref()
-            .map(|needle| {
-                label
-                    .to_ascii_lowercase()
-                    .contains(&needle.to_ascii_lowercase())
-            })
+            .map(|needle| label.to_ascii_lowercase().contains(&needle.to_ascii_lowercase()))
             .unwrap_or(true)
     }
 
@@ -65,9 +59,9 @@ pub enum NumericPredicate {
 impl NumericPredicate {
     pub fn validate(&self) -> Result<(), ValidationError> {
         match self {
-            Self::AtLeast(v) | Self::AtMost(v) if !v.is_finite() => Err(
-                ValidationError::InvalidState("numeric predicate bound must be finite".into()),
-            ),
+            Self::AtLeast(v) | Self::AtMost(v) if !v.is_finite() => Err(ValidationError::InvalidState(
+                "numeric predicate bound must be finite".into(),
+            )),
             Self::BetweenInclusive { min, max } => {
                 if !min.is_finite() || !max.is_finite() {
                     return Err(ValidationError::InvalidState(
@@ -159,9 +153,9 @@ pub enum AlertRule {
 impl AlertRule {
     pub fn validate(&self) -> Result<(), ValidationError> {
         match self {
-            Self::NumericAtLeast(v) | Self::NumericAtMost(v) if !v.is_finite() => Err(
-                ValidationError::InvalidState("alert threshold must be finite".into()),
-            ),
+            Self::NumericAtLeast(v) | Self::NumericAtMost(v) if !v.is_finite() => Err(ValidationError::InvalidState(
+                "alert threshold must be finite".into(),
+            )),
             Self::NumericOutsideInclusive { min, max } => {
                 if !min.is_finite() || !max.is_finite() {
                     return Err(ValidationError::InvalidState(
@@ -188,9 +182,7 @@ impl AlertRule {
         match (self, value) {
             (Self::NumericAtLeast(threshold), SampleValue::Numeric(v)) => *v >= *threshold,
             (Self::NumericAtMost(threshold), SampleValue::Numeric(v)) => *v <= *threshold,
-            (Self::NumericOutsideInclusive { min, max }, SampleValue::Numeric(v)) => {
-                *v < *min || *v > *max
-            }
+            (Self::NumericOutsideInclusive { min, max }, SampleValue::Numeric(v)) => *v < *min || *v > *max,
             (Self::CodeEquals(expected), SampleValue::Code(found)) => found == expected,
             (Self::FlagIs(expected), SampleValue::Flag(found)) => found == expected,
             (Self::AnyPresent, SampleValue::Missing) => false,

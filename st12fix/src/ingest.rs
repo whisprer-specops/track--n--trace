@@ -43,9 +43,9 @@ impl SourceSchedule {
 
     pub fn validate(self) -> Result<(), ValidationError> {
         match self {
-            Self::Fixed(interval) if interval.is_zero() => Err(ValidationError::ZeroCapacity(
-                "source_schedule.fixed".into(),
-            )),
+            Self::Fixed(interval) if interval.is_zero() => {
+                Err(ValidationError::ZeroCapacity("source_schedule.fixed".into()))
+            }
             _ => Ok(()),
         }
     }

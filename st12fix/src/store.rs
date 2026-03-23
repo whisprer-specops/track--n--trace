@@ -16,9 +16,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::entity::{Boundary, Edge, Node};
 use crate::ingest::{RawIngestRecord, SourceDefinition};
-use crate::metric::{
-    LatestValue, MetricDefinition, MetricRetentionReport, RetentionTuning, Sample,
-};
+use crate::metric::{LatestValue, MetricDefinition, MetricRetentionReport, RetentionTuning, Sample};
 use crate::types::{EntityId, MetricId, SourceId, Timestamp, ValidationError};
 use crate::view::TimeRange;
 use crate::warm_store::{SqliteWarmStore, WarmStoreError, WarmStoreMaintenanceReport};
@@ -373,14 +371,8 @@ impl EngineStore {
             raw_records_seen: raw_records.len(),
             raw_records_written,
             samples_seen: samples.len(),
-            samples_stored: outcomes
-                .iter()
-                .filter(|outcome| outcome.stored_history)
-                .count(),
-            latest_updates: outcomes
-                .iter()
-                .filter(|outcome| outcome.updated_latest)
-                .count(),
+            samples_stored: outcomes.iter().filter(|outcome| outcome.stored_history).count(),
+            latest_updates: outcomes.iter().filter(|outcome| outcome.updated_latest).count(),
         })
     }
 
@@ -395,8 +387,7 @@ impl EngineStore {
         let previous = self.latest_values.get(&key);
         let should_store = metric.retention.should_store(previous, &sample);
 
-        self.latest_values
-            .insert(key, LatestValue::from_sample(&sample));
+        self.latest_values.insert(key, LatestValue::from_sample(&sample));
 
         if should_store {
             self.retained_samples
@@ -531,7 +522,6 @@ fn append_line_json<T: Serialize>(path: &Path, value: &T) -> Result<(), StoreErr
     serde_json::to_writer(&mut file, value).map_err(|err| StoreError::Serde(err.to_string()))?;
     file.write_all(b"\n")
         .map_err(|err| StoreError::Io(err.to_string()))?;
-    file.flush()
-        .map_err(|err| StoreError::Io(err.to_string()))?;
+    file.flush().map_err(|err| StoreError::Io(err.to_string()))?;
     Ok(())
 }

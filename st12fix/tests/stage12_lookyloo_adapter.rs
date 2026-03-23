@@ -3,8 +3,8 @@ use std::time::Duration;
 use chrono::{TimeZone, Timelike, Utc};
 
 use skeletrace::{
-    AdapterKind, AdapterProfile, HttpRequestProfile, LookylooMetricBindings, LookylooSourceConfig,
-    MetricId, Quality,
+    AdapterKind, AdapterProfile, HttpRequestProfile, LookylooMetricBindings,
+    LookylooSourceConfig, MetricId, Quality,
 };
 
 #[test]
@@ -40,10 +40,7 @@ fn lookyloo_profile_builds_http_poller_adapter() {
     profile.validate().unwrap();
     let mut adapter = profile.build_adapter().unwrap();
     assert_eq!(adapter.kind(), AdapterKind::HttpPoller);
-    assert!(adapter
-        .as_any_mut()
-        .downcast_mut::<skeletrace::LookylooSummaryAdapter>()
-        .is_some());
+    assert!(adapter.as_any_mut().downcast_mut::<skeletrace::LookylooSummaryAdapter>().is_some());
 }
 
 #[test]
@@ -55,11 +52,5 @@ fn lookyloo_timestamp_parser_accepts_python_cache_format() {
     });
 
     let summary = skeletrace::LookylooCaptureSummary::from_value(&body).unwrap();
-    assert_eq!(
-        summary.timestamp.unwrap(),
-        Utc.with_ymd_and_hms(2025, 3, 23, 12, 34, 56)
-            .unwrap()
-            .with_nanosecond(123_456_000)
-            .unwrap()
-    );
+    assert_eq!(summary.timestamp.unwrap(), Utc.with_ymd_and_hms(2025, 3, 23, 12, 34, 56).unwrap().with_nanosecond(123_456_000).unwrap());
 }

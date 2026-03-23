@@ -124,8 +124,8 @@ fn cache_entry_upserts_latest_values() {
     let source_id = SourceId::new();
     let now = Utc::now();
 
-    let mut entry =
-        CacheEntry::new(entity_id, DetailTier::Active, Duration::from_secs(60), now).unwrap();
+    let mut entry = CacheEntry::new(entity_id, DetailTier::Active, Duration::from_secs(60), now)
+        .unwrap();
 
     entry.upsert_latest(LatestValue {
         metric_id,
@@ -143,8 +143,5 @@ fn cache_entry_upserts_latest_values() {
     });
 
     assert_eq!(entry.latest_by_metric.len(), 1);
-    assert_eq!(
-        entry.latest(metric_id).unwrap().value,
-        SampleValue::Flag(false)
-    );
+    assert_eq!(entry.latest(metric_id).unwrap().value, SampleValue::Flag(false));
 }

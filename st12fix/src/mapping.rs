@@ -60,9 +60,9 @@ impl ValueSelector {
             Self::JsonPointer { pointer } if pointer.trim().is_empty() => {
                 Err(ValidationError::EmptyField("mapping.metric.pointer".into()))
             }
-            Self::LiteralCode(value) if value.trim().is_empty() => Err(
-                ValidationError::EmptyField("mapping.metric.literal_code".into()),
-            ),
+            Self::LiteralCode(value) if value.trim().is_empty() => {
+                Err(ValidationError::EmptyField("mapping.metric.literal_code".into()))
+            }
             _ => Ok(()),
         }
     }

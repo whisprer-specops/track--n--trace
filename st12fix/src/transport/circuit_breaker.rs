@@ -77,7 +77,9 @@ pub enum CircuitCheck {
     /// Request may proceed.
     Allowed(CircuitState),
     /// Circuit is open; caller must wait.
-    Blocked { remaining_cooldown: Duration },
+    Blocked {
+        remaining_cooldown: Duration,
+    },
 }
 
 // ─── Per-domain tracker ──────────────────────────────────────────────────────
@@ -266,10 +268,7 @@ mod tests {
     #[test]
     fn starts_closed() {
         let mut cb = CircuitBreaker::default();
-        assert!(matches!(
-            cb.check("a.com"),
-            CircuitCheck::Allowed(CircuitState::Closed)
-        ));
+        assert!(matches!(cb.check("a.com"), CircuitCheck::Allowed(CircuitState::Closed)));
     }
 
     #[test]

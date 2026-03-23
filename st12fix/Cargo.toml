@@ -15,3 +15,4 @@ ureq = { version = "2", default-features = true, features = ["socks-proxy"] }
 base64 = "0.22"
 rss = "2"
 rusqlite = { version = "0.31", features = ["bundled"] }
+csv = "1.3"
