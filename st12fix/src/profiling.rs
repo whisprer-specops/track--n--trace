@@ -21,7 +21,9 @@ pub struct PerfProbeConfig {
 impl PerfProbeConfig {
     pub fn validate(&self) -> Result<(), ValidationError> {
         if self.iterations == 0 {
-            return Err(ValidationError::ZeroCapacity("perf_probe.iterations".into()));
+            return Err(ValidationError::ZeroCapacity(
+                "perf_probe.iterations".into(),
+            ));
         }
         Ok(())
     }
@@ -112,7 +114,11 @@ pub fn cache_health<'a>(entries: impl Iterator<Item = &'a CacheEntry>) -> CacheH
     report
 }
 
-pub fn profile_topology<F>(view: &ViewJob, iterations: u32, mut materialize: F) -> Result<PerfProbeReport, EngineError>
+pub fn profile_topology<F>(
+    view: &ViewJob,
+    iterations: u32,
+    mut materialize: F,
+) -> Result<PerfProbeReport, EngineError>
 where
     F: FnMut() -> Result<TopologyViewMaterialization, EngineError>,
 {
@@ -131,7 +137,11 @@ where
     })
 }
 
-pub fn profile_sparse_geo<F>(view: &ViewJob, iterations: u32, mut materialize: F) -> Result<PerfProbeReport, EngineError>
+pub fn profile_sparse_geo<F>(
+    view: &ViewJob,
+    iterations: u32,
+    mut materialize: F,
+) -> Result<PerfProbeReport, EngineError>
 where
     F: FnMut() -> Result<SparseGeoViewMaterialization, EngineError>,
 {

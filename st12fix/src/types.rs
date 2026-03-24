@@ -101,10 +101,22 @@ macro_rules! id_newtype {
     };
 }
 
-id_newtype!(EntityId, "Identifies a graph entity (node, edge, or boundary).");
-id_newtype!(MetricId, "Identifies a metric definition in the metric dictionary.");
-id_newtype!(SourceId, "Identifies a data source (API, stream, file, database, etc.).");
-id_newtype!(FlowId, "Identifies a flow (a time-bound traversal across relations).");
+id_newtype!(
+    EntityId,
+    "Identifies a graph entity (node, edge, or boundary)."
+);
+id_newtype!(
+    MetricId,
+    "Identifies a metric definition in the metric dictionary."
+);
+id_newtype!(
+    SourceId,
+    "Identifies a data source (API, stream, file, database, etc.)."
+);
+id_newtype!(
+    FlowId,
+    "Identifies a flow (a time-bound traversal across relations)."
+);
 id_newtype!(SnapshotId, "Identifies a persisted snapshot.");
 id_newtype!(ViewJobId, "Identifies a view/render job request.");
 
@@ -173,9 +185,7 @@ impl Default for Quality {
 }
 
 /// Priority value. Higher = more important for retention/rendering.
-#[derive(
-    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize,
-)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct Priority(pub u8);
 
 impl Priority {

@@ -1,4 +1,7 @@
-use skeletrace::{analyze_packets, render_packet_landscape_frame, verify_packet_events, PacketEvent, PacketLandscapeOptions, PacketLane, PacketVerificationRequest};
+use skeletrace::{
+    analyze_packets, render_packet_landscape_frame, verify_packet_events, PacketEvent,
+    PacketLandscapeOptions, PacketLane, PacketVerificationRequest,
+};
 
 fn event(
     ts_ms: u64,
@@ -83,7 +86,6 @@ fn verify_flags_a_clear_spike_without_needing_terminal_mode() {
     assert!(!report.alerts.is_empty());
 }
 
-
 #[test]
 fn analyze_packets_returns_optional_ascii_frame() {
     let request = PacketVerificationRequest {
@@ -103,5 +105,8 @@ fn analyze_packets_returns_optional_ascii_frame() {
     let response = analyze_packets(request).unwrap();
     assert_eq!(response.summary.total_events, 2);
     assert_eq!(response.summary.tick_ms, 100);
-    assert!(response.ascii_frame.as_ref().is_some_and(|frame| frame.contains("mode=operator")));
+    assert!(response
+        .ascii_frame
+        .as_ref()
+        .is_some_and(|frame| frame.contains("mode=operator")));
 }

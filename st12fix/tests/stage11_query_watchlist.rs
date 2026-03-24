@@ -2,12 +2,12 @@ use std::time::Duration;
 
 use chrono::Utc;
 use skeletrace::{
-    AdapterKind, AdapterProfile, Confidence, EngineConfig, EngineProfile, EntityId,
-    EntityStatus, FlowId, GeoCoord, InterpolationMethod, MetricDefinition, MetricId,
-    MetricValueType, NumericPredicate, OperatorApi, OperatorRequest, OperatorResponse,
-    PollCadence, Priority, Quality, QueryFilter, Sample, SampleValue, SnapshotExporter,
-    SourceDefinition, SourceHealth, SourceId, SourceKind, SourceProfile, SourcePull,
-    SourceSchedule, Tag, WatchItem, Watchlist, RetentionPolicy,
+    AdapterKind, AdapterProfile, Confidence, EngineConfig, EngineProfile, EntityId, EntityStatus,
+    FlowId, GeoCoord, InterpolationMethod, MetricDefinition, MetricId, MetricValueType,
+    NumericPredicate, OperatorApi, OperatorRequest, OperatorResponse, PollCadence, Priority,
+    Quality, QueryFilter, RetentionPolicy, Sample, SampleValue, SnapshotExporter, SourceDefinition,
+    SourceHealth, SourceId, SourceKind, SourceProfile, SourcePull, SourceSchedule, Tag, WatchItem,
+    Watchlist,
 };
 
 fn manual_source(source_id: SourceId) -> SourceDefinition {
@@ -66,7 +66,13 @@ fn node(entity_id: EntityId, label: &str, now: chrono::DateTime<chrono::Utc>) ->
     }
 }
 
-fn sample(entity_id: EntityId, metric_id: MetricId, source_id: SourceId, now: chrono::DateTime<chrono::Utc>, value: f64) -> Sample {
+fn sample(
+    entity_id: EntityId,
+    metric_id: MetricId,
+    source_id: SourceId,
+    now: chrono::DateTime<chrono::Utc>,
+    value: f64,
+) -> Sample {
     Sample {
         entity_id,
         metric_id,
@@ -102,35 +108,46 @@ fn query_latest_filters_by_label_metric_and_threshold() {
         }],
     };
 
-    let exporter = SnapshotExporter::new(temp_dir.join("exports"), None::<std::path::PathBuf>).unwrap();
+    let exporter =
+        SnapshotExporter::new(temp_dir.join("exports"), None::<std::path::PathBuf>).unwrap();
     let mut api = OperatorApi::from_profile(&profile, exporter, now).unwrap();
-    api.engine_mut().enqueue_manual_batch(source_id, SourcePull {
-        raw_records: vec![],
-        samples: vec![
-            sample(alpha_id, metric_id, source_id, now, 12.0),
-            sample(beta_id, metric_id, source_id, now, 3.0),
-        ],
-        touched_entities: vec![alpha_id, beta_id],
-        nodes: vec![],
-        edges: vec![],
-        boundaries: vec![],
-    }).unwrap();
+    api.engine_mut()
+        .enqueue_manual_batch(
+            source_id,
+            SourcePull {
+                raw_records: vec![],
+                samples: vec![
+                    sample(alpha_id, metric_id, source_id, now, 12.0),
+                    sample(beta_id, metric_id, source_id, now, 3.0),
+                ],
+                touched_entities: vec![alpha_id, beta_id],
+                nodes: vec![],
+                edges: vec![],
+                boundaries: vec![],
+            },
+        )
+        .unwrap();
     api.engine_mut().poll_source_now(source_id, now).unwrap();
 
-    let response = api.execute(OperatorRequest::QueryLatest {
-        filter: QueryFilter {
-            entities: skeletrace::EntitySelector {
-                entity_ids: vec![],
-                label_contains: Some("alp".into()),
-                class: Some(skeletrace::EntityClass::Node),
+    let response = api
+        .execute(OperatorRequest::QueryLatest {
+            filter: QueryFilter {
+                entities: skeletrace::EntitySelector {
+                    entity_ids: vec![],
+                    label_contains: Some("alp".into()),
+                    class: Some(skeletrace::EntityClass::Node),
+                },
+                metric_ids: vec![metric_id],
+                only_hot: true,
+                numeric_predicate: Some(NumericPredicate::AtLeast(10.0)),
+                limit: Some(10),
+                source_ids: vec![],
+                entity_statuses: vec![],
+                required_tags: vec![],
             },
-            metric_ids: vec![metric_id],
-            only_hot: true,
-            numeric_predicate: Some(NumericPredicate::AtLeast(10.0)),
-            limit: Some(10),
-        },
-        now,
-    }).unwrap();
+            now,
+        })
+        .unwrap();
 
     let query = match response {
         OperatorResponse::Query(query) => query,
@@ -166,30 +183,38 @@ fn watchlist_evaluation_emits_alerts_for_matching_latest_values() {
         }],
     };
 
-    let exporter = SnapshotExporter::new(temp_dir.join("exports"), None::<std::path::PathBuf>).unwrap();
+    let exporter =
+        SnapshotExporter::new(temp_dir.join("exports"), None::<std::path::PathBuf>).unwrap();
     let mut api = OperatorApi::from_profile(&profile, exporter, now).unwrap();
-    api.engine_mut().enqueue_manual_batch(source_id, SourcePull {
-        raw_records: vec![],
-        samples: vec![sample(entity_id, metric_id, source_id, now, 42.0)],
-        touched_entities: vec![entity_id],
-        nodes: vec![],
-        edges: vec![],
-        boundaries: vec![],
-    }).unwrap();
+    api.engine_mut()
+        .enqueue_manual_batch(
+            source_id,
+            SourcePull {
+                raw_records: vec![],
+                samples: vec![sample(entity_id, metric_id, source_id, now, 42.0)],
+                touched_entities: vec![entity_id],
+                nodes: vec![],
+                edges: vec![],
+                boundaries: vec![],
+            },
+        )
+        .unwrap();
     api.engine_mut().poll_source_now(source_id, now).unwrap();
 
-    let response = api.execute(OperatorRequest::EvaluateWatchlist {
-        watchlist: Watchlist {
-            label: "priority-watch".into(),
-            items: vec![WatchItem {
-                label: "alpha-volume-high".into(),
-                entity_id,
-                metric_id,
-                rule: skeletrace::AlertRule::NumericAtLeast(40.0),
-            }],
-        },
-        now,
-    }).unwrap();
+    let response = api
+        .execute(OperatorRequest::EvaluateWatchlist {
+            watchlist: Watchlist {
+                label: "priority-watch".into(),
+                items: vec![WatchItem {
+                    label: "alpha-volume-high".into(),
+                    entity_id,
+                    metric_id,
+                    rule: skeletrace::AlertRule::NumericAtLeast(40.0),
+                }],
+            },
+            now,
+        })
+        .unwrap();
 
     let evaluation = match response {
         OperatorResponse::Watchlist(evaluation) => evaluation,

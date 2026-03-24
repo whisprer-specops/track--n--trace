@@ -2,9 +2,9 @@ use std::time::Duration;
 
 use chrono::{TimeDelta, Utc};
 use skeletrace::{
-    AdapterKind, CacheBudget, DetailTier, EntityId, ExportFormat, GeoBBox, MetricId,
-    SnapshotId, SnapshotManifest, SnapshotRequest, SourceDefinition, SourceHealth, SourceId,
-    SourceKind, SourceSchedule, TimeRange, ValidationError, ViewJob, ViewJobId, ViewKind,
+    AdapterKind, CacheBudget, DetailTier, EntityId, ExportFormat, GeoBBox, MetricId, SnapshotId,
+    SnapshotManifest, SnapshotRequest, SourceDefinition, SourceHealth, SourceId, SourceKind,
+    SourceSchedule, TimeRange, ValidationError, ViewJob, ViewJobId, ViewKind,
 };
 
 #[test]

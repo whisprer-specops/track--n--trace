@@ -2,9 +2,9 @@ use std::time::Duration;
 
 use chrono::{TimeDelta, Utc};
 use skeletrace::{
-    CacheEntry, DetailTier, EntityId, InterpolationMethod, LatestValue, MetricDefinition,
-    MetricId, MetricValueType, PollCadence, Quality, RetentionPolicy, RingBuffer, Sample,
-    SampleValue, SourceId,
+    CacheEntry, DetailTier, EntityId, InterpolationMethod, LatestValue, MetricDefinition, MetricId,
+    MetricValueType, PollCadence, Quality, RetentionPolicy, RingBuffer, Sample, SampleValue,
+    SourceId,
 };
 
 fn sample(
@@ -77,8 +77,8 @@ fn cache_entry_hot_bytes_grow_when_latest_and_buffers_are_added() {
     let source_id = SourceId::new();
     let now = Utc::now();
 
-    let mut entry = CacheEntry::new(entity_id, DetailTier::Sampled, Duration::from_secs(90), now)
-        .unwrap();
+    let mut entry =
+        CacheEntry::new(entity_id, DetailTier::Sampled, Duration::from_secs(90), now).unwrap();
     let initial = entry.approx_hot_bytes();
 
     entry.upsert_latest(LatestValue {

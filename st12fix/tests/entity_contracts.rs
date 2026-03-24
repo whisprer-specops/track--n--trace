@@ -3,8 +3,7 @@ use std::time::Duration;
 use chrono::{TimeDelta, Utc};
 use skeletrace::{
     Boundary, BoundaryKind, Confidence, Edge, EdgeDirection, EdgeKind, EntityId, EntityStatus,
-    Flow, FlowId, FlowKind, GeoBBox, GeometryMode, Node, NodeKind, Priority, Tag,
-    ValidationError,
+    Flow, FlowId, FlowKind, GeoBBox, GeometryMode, Node, NodeKind, Priority, Tag, ValidationError,
 };
 
 #[test]
@@ -32,7 +31,10 @@ fn node_validation_rejects_blank_labels() {
         last_seen: now,
     };
 
-    assert!(matches!(node.validate(), Err(ValidationError::EmptyField(_))));
+    assert!(matches!(
+        node.validate(),
+        Err(ValidationError::EmptyField(_))
+    ));
 }
 
 #[test]
@@ -77,7 +79,10 @@ fn flow_validation_rejects_empty_paths_and_zero_ttl() {
         tags: vec![],
     };
 
-    assert!(matches!(flow.validate(), Err(ValidationError::EmptyField(_))));
+    assert!(matches!(
+        flow.validate(),
+        Err(ValidationError::EmptyField(_))
+    ));
 
     let flow = Flow {
         edge_path: vec![EntityId::new()],

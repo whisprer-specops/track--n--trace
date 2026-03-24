@@ -33,11 +33,16 @@ use serde_json::Value;
 use uuid::Uuid;
 
 use crate::adapter::{AdapterError, SourceAdapter, SourcePull};
-use crate::entity::{Boundary, BoundaryKind, Edge, EdgeDirection, EdgeKind, EntityStatus, GeometryMode, Node, NodeKind};
+use crate::entity::{
+    Boundary, BoundaryKind, Edge, EdgeDirection, EdgeKind, EntityStatus, GeometryMode, Node,
+    NodeKind,
+};
 use crate::ingest::{AdapterKind, RawIngestRecord, SourceDefinition};
 use crate::metric::{Sample, SampleValue};
 use crate::transport::{http_get_text, HttpRequestProfile};
-use crate::types::{Confidence, EntityId, MetricId, Priority, Quality, SourceId, Tag, Timestamp, ValidationError};
+use crate::types::{
+    Confidence, EntityId, MetricId, Priority, Quality, SourceId, Tag, Timestamp, ValidationError,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct LookylooMetricBindings {
@@ -98,15 +103,12 @@ impl LookylooSourceConfig {
             }
             if !pointer.starts_with('/') {
                 return Err(ValidationError::InvalidState(
-                    "lookyloo.payload_root_pointer must be a JSON pointer starting with '/'"
-                        .into(),
+                    "lookyloo.payload_root_pointer must be a JSON pointer starting with '/'".into(),
                 ));
             }
         }
         if self.metrics.is_empty() {
-            return Err(ValidationError::ZeroCapacity(
-                "lookyloo.metrics".into(),
-            ));
+            return Err(ValidationError::ZeroCapacity("lookyloo.metrics".into()));
         }
         Ok(())
     }
@@ -253,15 +255,9 @@ impl LookylooCaptureSummary {
     #[must_use]
     pub fn entity_id(&self, source_id: SourceId) -> EntityId {
         if let Ok(uuid) = Uuid::parse_str(&self.uuid) {
-            return EntityId::from_uuid(Uuid::new_v5(
-                &source_id.as_uuid(),
-                uuid.as_bytes(),
-            ));
+            return EntityId::from_uuid(Uuid::new_v5(&source_id.as_uuid(), uuid.as_bytes()));
         }
-        EntityId::from_uuid(Uuid::new_v5(
-            &source_id.as_uuid(),
-            self.uuid.as_bytes(),
-        ))
+        EntityId::from_uuid(Uuid::new_v5(&source_id.as_uuid(), self.uuid.as_bytes()))
     }
 
     #[must_use]
@@ -285,10 +281,7 @@ pub struct LookylooSummaryAdapter {
 }
 
 impl LookylooSummaryAdapter {
-    pub fn new(
-        config: LookylooSourceConfig,
-        timeout: Duration,
-    ) -> Result<Self, AdapterError> {
+    pub fn new(config: LookylooSourceConfig, timeout: Duration) -> Result<Self, AdapterError> {
         Self::with_request_profile(config, HttpRequestProfile::direct(timeout))
     }
 
@@ -310,8 +303,8 @@ impl LookylooSummaryAdapter {
         now: Timestamp,
         body: &str,
     ) -> Result<SourcePull, AdapterError> {
-        let payload: Value = serde_json::from_str(body)
-            .map_err(|err| AdapterError::Parse(err.to_string()))?;
+        let payload: Value =
+            serde_json::from_str(body).map_err(|err| AdapterError::Parse(err.to_string()))?;
         self.pull_from_value(source, now, payload)
     }
 
@@ -382,10 +375,7 @@ pub struct LookylooTopologyAdapter {
 }
 
 impl LookylooTopologyAdapter {
-    pub fn new(
-        config: LookylooTopologyConfig,
-        timeout: Duration,
-    ) -> Result<Self, AdapterError> {
+    pub fn new(config: LookylooTopologyConfig, timeout: Duration) -> Result<Self, AdapterError> {
         Self::with_request_profile(config, HttpRequestProfile::direct(timeout))
     }
 
@@ -407,8 +397,8 @@ impl LookylooTopologyAdapter {
         now: Timestamp,
         body: &str,
     ) -> Result<SourcePull, AdapterError> {
-        let payload: Value = serde_json::from_str(body)
-            .map_err(|err| AdapterError::Parse(err.to_string()))?;
+        let payload: Value =
+            serde_json::from_str(body).map_err(|err| AdapterError::Parse(err.to_string()))?;
         self.pull_from_value(source, now, payload)
     }
 
@@ -456,7 +446,8 @@ impl LookylooTopologyAdapter {
                 batch.samples.extend(samples);
             }
 
-            let topology = build_topology_from_summary(source.id, observed_at, &summary, &self.config)?;
+            let topology =
+                build_topology_from_summary(source.id, observed_at, &summary, &self.config)?;
             for node in topology.0 {
                 if seen_nodes.insert(node.id) {
                     batch.touched_entities.push(node.id);
@@ -898,7 +889,8 @@ fn parse_timestamp_string(text: &str) -> Result<Timestamp, AdapterError> {
     if let Ok(parsed) = DateTime::parse_from_str(trimmed, "%Y-%m-%d %H:%M:%S%z") {
         return Ok(parsed.with_timezone(&Utc));
     }
-    if let Ok(parsed) = DateTime::<FixedOffset>::parse_from_str(trimmed, "%a, %d %b %Y %H:%M:%S %z") {
+    if let Ok(parsed) = DateTime::<FixedOffset>::parse_from_str(trimmed, "%a, %d %b %Y %H:%M:%S %z")
+    {
         return Ok(parsed.with_timezone(&Utc));
     }
 
@@ -912,8 +904,7 @@ fn normalize_fractional_timezone_timestamp(text: &str) -> Option<String> {
     let dot_rel = text[t_pos..].find('.')?;
     let dot_pos = t_pos + dot_rel;
 
-    let tz_rel = text[dot_pos + 1..]
-        .find(|c: char| c == '+' || c == '-' || c == 'Z')?;
+    let tz_rel = text[dot_pos + 1..].find(|c: char| c == '+' || c == '-' || c == 'Z')?;
     let tz_pos = dot_pos + 1 + tz_rel;
 
     let fraction = &text[dot_pos + 1..tz_pos];
@@ -975,7 +966,14 @@ fn build_topology_from_summary(
     if config.include_capture_root_edge {
         if let Some(domain) = root_domain.as_deref() {
             let domain_id = domain_entity_id(source_id, domain);
-            ensure_domain_node(&mut nodes, source_id, observed_at, domain_id, domain, config.include_domain_nodes);
+            ensure_domain_node(
+                &mut nodes,
+                source_id,
+                observed_at,
+                domain_id,
+                domain,
+                config.include_domain_nodes,
+            );
             edges.push(build_capture_domain_edge(
                 source_id,
                 capture_id,
@@ -989,7 +987,14 @@ fn build_topology_from_summary(
     if config.include_capture_final_edge {
         if let Some(domain) = final_domain.as_deref() {
             let domain_id = domain_entity_id(source_id, domain);
-            ensure_domain_node(&mut nodes, source_id, observed_at, domain_id, domain, config.include_domain_nodes);
+            ensure_domain_node(
+                &mut nodes,
+                source_id,
+                observed_at,
+                domain_id,
+                domain,
+                config.include_domain_nodes,
+            );
             edges.push(build_capture_domain_edge(
                 source_id,
                 capture_id,
@@ -1009,8 +1014,22 @@ fn build_topology_from_summary(
             }
             let left_id = domain_entity_id(source_id, left);
             let right_id = domain_entity_id(source_id, right);
-            ensure_domain_node(&mut nodes, source_id, observed_at, left_id, left, config.include_domain_nodes);
-            ensure_domain_node(&mut nodes, source_id, observed_at, right_id, right, config.include_domain_nodes);
+            ensure_domain_node(
+                &mut nodes,
+                source_id,
+                observed_at,
+                left_id,
+                left,
+                config.include_domain_nodes,
+            );
+            ensure_domain_node(
+                &mut nodes,
+                source_id,
+                observed_at,
+                right_id,
+                right,
+                config.include_domain_nodes,
+            );
             edges.push(build_domain_redirect_edge(
                 source_id,
                 left_id,
@@ -1023,9 +1042,19 @@ fn build_topology_from_summary(
         }
     }
     if config.include_parent_capture_edges {
-        if let Some(parent_uuid) = summary.parent.as_deref().filter(|value| !value.trim().is_empty()) {
+        if let Some(parent_uuid) = summary
+            .parent
+            .as_deref()
+            .filter(|value| !value.trim().is_empty())
+        {
             let parent_id = capture_entity_id_from_text(source_id, parent_uuid);
-            ensure_capture_stub_node(&mut nodes, parent_id, observed_at, parent_uuid, config.include_capture_nodes);
+            ensure_capture_stub_node(
+                &mut nodes,
+                parent_id,
+                observed_at,
+                parent_uuid,
+                config.include_capture_nodes,
+            );
             edges.push(build_parent_capture_edge(
                 source_id,
                 parent_id,
@@ -1038,7 +1067,13 @@ fn build_topology_from_summary(
 
     if config.include_category_boundaries {
         for category in &summary.categories {
-            let boundary = build_category_boundary(source_id, observed_at, capture_id, category, config.relationship_confidence)?;
+            let boundary = build_category_boundary(
+                source_id,
+                observed_at,
+                capture_id,
+                category,
+                config.relationship_confidence,
+            )?;
             boundaries.push(boundary);
         }
     }
@@ -1068,7 +1103,11 @@ fn build_topology_from_summary(
     Ok((nodes, edges, boundaries))
 }
 
-fn build_capture_node(capture_id: EntityId, observed_at: Timestamp, summary: &LookylooCaptureSummary) -> Node {
+fn build_capture_node(
+    capture_id: EntityId,
+    observed_at: Timestamp,
+    summary: &LookylooCaptureSummary,
+) -> Node {
     let label = summary
         .title
         .clone()
@@ -1083,9 +1122,18 @@ fn build_capture_node(capture_id: EntityId, observed_at: Timestamp, summary: &Lo
         status: EntityStatus::Active,
         priority: Priority::HIGH,
         tags: vec![
-            Tag { key: "source".into(), value: "lookyloo".into() },
-            Tag { key: "role".into(), value: "capture".into() },
-            Tag { key: "capture_uuid".into(), value: summary.uuid.clone() },
+            Tag {
+                key: "source".into(),
+                value: "lookyloo".into(),
+            },
+            Tag {
+                key: "role".into(),
+                value: "capture".into(),
+            },
+            Tag {
+                key: "capture_uuid".into(),
+                value: summary.uuid.clone(),
+            },
         ],
         first_seen: observed_at,
         last_seen: observed_at,
@@ -1102,8 +1150,14 @@ fn build_domain_node(source_id: SourceId, observed_at: Timestamp, domain: &str) 
         status: EntityStatus::Active,
         priority: Priority::NORMAL,
         tags: vec![
-            Tag { key: "source".into(), value: "lookyloo".into() },
-            Tag { key: "role".into(), value: "domain".into() },
+            Tag {
+                key: "source".into(),
+                value: "lookyloo".into(),
+            },
+            Tag {
+                key: "role".into(),
+                value: "domain".into(),
+            },
         ],
         first_seen: observed_at,
         last_seen: observed_at,
@@ -1146,8 +1200,14 @@ fn ensure_capture_stub_node(
             status: EntityStatus::Active,
             priority: Priority::NORMAL,
             tags: vec![
-                Tag { key: "source".into(), value: "lookyloo".into() },
-                Tag { key: "role".into(), value: "capture-parent".into() },
+                Tag {
+                    key: "source".into(),
+                    value: "lookyloo".into(),
+                },
+                Tag {
+                    key: "role".into(),
+                    value: "capture-parent".into(),
+                },
             ],
             first_seen: observed_at,
             last_seen: observed_at,
@@ -1164,10 +1224,15 @@ fn build_capture_domain_edge(
     relation: &str,
 ) -> Result<Edge, AdapterError> {
     if capture_id == domain_id {
-        return Err(AdapterError::Parse("capture/domain edge endpoints must differ".into()));
+        return Err(AdapterError::Parse(
+            "capture/domain edge endpoints must differ".into(),
+        ));
     }
     Ok(Edge {
-        id: named_entity_id(source_id, &format!("capture-edge:{relation}:{capture_id}:{domain_id}")),
+        id: named_entity_id(
+            source_id,
+            &format!("capture-edge:{relation}:{capture_id}:{domain_id}"),
+        ),
         kind: EdgeKind::Association,
         direction: EdgeDirection::Directed,
         source: capture_id,
@@ -1178,8 +1243,14 @@ fn build_capture_domain_edge(
         status: EntityStatus::Active,
         priority: Priority::HIGH,
         tags: vec![
-            Tag { key: "source".into(), value: "lookyloo".into() },
-            Tag { key: "relation".into(), value: relation.to_owned() },
+            Tag {
+                key: "source".into(),
+                value: "lookyloo".into(),
+            },
+            Tag {
+                key: "relation".into(),
+                value: relation.to_owned(),
+            },
         ],
         first_seen: observed_at,
         last_seen: observed_at,
@@ -1196,7 +1267,9 @@ fn build_domain_redirect_edge(
     right: &str,
 ) -> Result<Edge, AdapterError> {
     if left_id == right_id {
-        return Err(AdapterError::Parse("redirect edge endpoints must differ".into()));
+        return Err(AdapterError::Parse(
+            "redirect edge endpoints must differ".into(),
+        ));
     }
     Ok(Edge {
         id: named_entity_id(source_id, &format!("redirect:{left}->{right}")),
@@ -1210,8 +1283,14 @@ fn build_domain_redirect_edge(
         status: EntityStatus::Active,
         priority: Priority::NORMAL,
         tags: vec![
-            Tag { key: "source".into(), value: "lookyloo".into() },
-            Tag { key: "relation".into(), value: "redirect-chain".into() },
+            Tag {
+                key: "source".into(),
+                value: "lookyloo".into(),
+            },
+            Tag {
+                key: "relation".into(),
+                value: "redirect-chain".into(),
+            },
         ],
         first_seen: observed_at,
         last_seen: observed_at,
@@ -1226,10 +1305,15 @@ fn build_parent_capture_edge(
     confidence: Confidence,
 ) -> Result<Edge, AdapterError> {
     if parent_id == capture_id {
-        return Err(AdapterError::Parse("parent/capture edge endpoints must differ".into()));
+        return Err(AdapterError::Parse(
+            "parent/capture edge endpoints must differ".into(),
+        ));
     }
     Ok(Edge {
-        id: named_entity_id(source_id, &format!("capture-parent:{parent_id}:{capture_id}")),
+        id: named_entity_id(
+            source_id,
+            &format!("capture-parent:{parent_id}:{capture_id}"),
+        ),
         kind: EdgeKind::Reference,
         direction: EdgeDirection::Directed,
         source: parent_id,
@@ -1240,8 +1324,14 @@ fn build_parent_capture_edge(
         status: EntityStatus::Active,
         priority: Priority::NORMAL,
         tags: vec![
-            Tag { key: "source".into(), value: "lookyloo".into() },
-            Tag { key: "relation".into(), value: "parent-capture".into() },
+            Tag {
+                key: "source".into(),
+                value: "lookyloo".into(),
+            },
+            Tag {
+                key: "relation".into(),
+                value: "parent-capture".into(),
+            },
         ],
         first_seen: observed_at,
         last_seen: observed_at,
@@ -1256,10 +1346,15 @@ fn build_category_boundary(
     confidence: Confidence,
 ) -> Result<Boundary, AdapterError> {
     if category.trim().is_empty() {
-        return Err(AdapterError::Parse("lookyloo category boundary must not be empty".into()));
+        return Err(AdapterError::Parse(
+            "lookyloo category boundary must not be empty".into(),
+        ));
     }
     Ok(Boundary {
-        id: named_entity_id(source_id, &format!("category:{}", category.trim().to_ascii_lowercase())),
+        id: named_entity_id(
+            source_id,
+            &format!("category:{}", category.trim().to_ascii_lowercase()),
+        ),
         kind: BoundaryKind::Other,
         label: format!("Category: {}", category.trim()),
         extent: None,
@@ -1268,8 +1363,14 @@ fn build_category_boundary(
         status: EntityStatus::Active,
         priority: Priority::NORMAL,
         tags: vec![
-            Tag { key: "source".into(), value: "lookyloo".into() },
-            Tag { key: "category".into(), value: category.trim().to_owned() },
+            Tag {
+                key: "source".into(),
+                value: "lookyloo".into(),
+            },
+            Tag {
+                key: "category".into(),
+                value: category.trim().to_owned(),
+            },
         ],
         first_seen: observed_at,
         last_seen: observed_at,
@@ -1286,7 +1387,9 @@ fn build_boolean_boundary(
     confidence: Confidence,
 ) -> Result<Boundary, AdapterError> {
     if key.trim().is_empty() {
-        return Err(AdapterError::Parse("lookyloo boundary key must not be empty".into()));
+        return Err(AdapterError::Parse(
+            "lookyloo boundary key must not be empty".into(),
+        ));
     }
     Ok(Boundary {
         id: named_entity_id(source_id, key),
@@ -1297,14 +1400,20 @@ fn build_boolean_boundary(
         confidence,
         status: EntityStatus::Active,
         priority: Priority::NORMAL,
-        tags: vec![Tag { key: "source".into(), value: "lookyloo".into() }],
+        tags: vec![Tag {
+            key: "source".into(),
+            value: "lookyloo".into(),
+        }],
         first_seen: observed_at,
         last_seen: observed_at,
     })
 }
 
 fn domain_entity_id(source_id: SourceId, domain: &str) -> EntityId {
-    named_entity_id(source_id, &format!("domain:{}", domain.trim().to_ascii_lowercase()))
+    named_entity_id(
+        source_id,
+        &format!("domain:{}", domain.trim().to_ascii_lowercase()),
+    )
 }
 
 fn capture_entity_id_from_text(source_id: SourceId, capture_ref: &str) -> EntityId {
@@ -1339,7 +1448,10 @@ fn extract_domain(url: &str) -> Option<String> {
         host_port
     };
     let host = if host.starts_with('[') {
-        host.split(']').next().unwrap_or(host).trim_start_matches('[')
+        host.split(']')
+            .next()
+            .unwrap_or(host)
+            .trim_start_matches('[')
     } else {
         host.split(':').next().unwrap_or(host)
     };
@@ -1423,7 +1535,13 @@ mod tests {
         assert_eq!(summary.categories.len(), 2);
         assert!(summary.no_index);
         assert_eq!(summary.final_url(), Some("https://redirect-2.example"));
-        assert_eq!(summary.timestamp.unwrap(), Utc.with_ymd_and_hms(2025, 3, 23, 12, 34, 56).unwrap().with_nanosecond(123_456_000).unwrap());
+        assert_eq!(
+            summary.timestamp.unwrap(),
+            Utc.with_ymd_and_hms(2025, 3, 23, 12, 34, 56)
+                .unwrap()
+                .with_nanosecond(123_456_000)
+                .unwrap()
+        );
     }
 
     #[test]
@@ -1538,13 +1656,37 @@ mod tests {
         assert!(!batch.nodes.is_empty());
         assert!(!batch.edges.is_empty());
         assert!(!batch.boundaries.is_empty());
-        assert!(batch.nodes.iter().any(|node| node.label == "root.example.test"));
-        assert!(batch.nodes.iter().any(|node| node.label == "middle.example.test"));
-        assert!(batch.nodes.iter().any(|node| node.label == "final.example.test"));
-        assert!(batch.edges.iter().any(|edge| edge.tags.iter().any(|tag| tag.key == "relation" && tag.value == "redirect-chain")));
-        assert!(batch.edges.iter().any(|edge| edge.tags.iter().any(|tag| tag.key == "relation" && tag.value == "parent-capture")));
-        assert!(batch.boundaries.iter().any(|boundary| boundary.label == "Category: phish"));
-        assert!(batch.boundaries.iter().any(|boundary| boundary.label == "Lookyloo No-Index"));
-        assert!(batch.boundaries.iter().any(|boundary| boundary.label == "Lookyloo Error"));
+        assert!(batch
+            .nodes
+            .iter()
+            .any(|node| node.label == "root.example.test"));
+        assert!(batch
+            .nodes
+            .iter()
+            .any(|node| node.label == "middle.example.test"));
+        assert!(batch
+            .nodes
+            .iter()
+            .any(|node| node.label == "final.example.test"));
+        assert!(batch.edges.iter().any(|edge| edge
+            .tags
+            .iter()
+            .any(|tag| tag.key == "relation" && tag.value == "redirect-chain")));
+        assert!(batch.edges.iter().any(|edge| edge
+            .tags
+            .iter()
+            .any(|tag| tag.key == "relation" && tag.value == "parent-capture")));
+        assert!(batch
+            .boundaries
+            .iter()
+            .any(|boundary| boundary.label == "Category: phish"));
+        assert!(batch
+            .boundaries
+            .iter()
+            .any(|boundary| boundary.label == "Lookyloo No-Index"));
+        assert!(batch
+            .boundaries
+            .iter()
+            .any(|boundary| boundary.label == "Lookyloo Error"));
     }
 }

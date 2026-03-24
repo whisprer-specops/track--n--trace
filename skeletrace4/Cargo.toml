@@ -1,0 +1,38 @@
+[package]
+name = "skeletrace"
+version = "0.1.0"
+edition = "2021"
+description = "Sparse spatiotemporal flow-graph engine for OSINT telemetry"
+authors = ["wofl"]
+license = "MIT"
+
+[[example]]
+name = "probe_demo"
+path = "examples/probe_demo.rs"
+
+[[example]]
+name = "security_demo"
+path = "examples/security_demo.rs"
+
+[[example]]
+name = "privacy_demo"
+path = "examples/privacy_demo.rs"
+
+[[example]]
+name = "network_demo"
+path = "examples/network_demo.rs"
+
+[dependencies]
+# Serialization — pinned for Rust 1.75 compatibility
+serde = { version = "1.0.136", features = ["derive"] }
+serde_json = "1.0.79"
+
+# Timestamps — pinned to avoid ICU dependencies  
+chrono = { version = "0.4.19", features = ["serde"] }
+
+# Entity identity — pinned to very old version for Rust 1.75 compatibility
+uuid = { version = "0.8", features = ["serde", "v4"] }
+
+# Logging — compatible versions
+log = "0.4.14"
+env_logger = "0.9"

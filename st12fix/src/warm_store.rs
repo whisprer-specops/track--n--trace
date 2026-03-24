@@ -252,7 +252,9 @@ impl SqliteWarmStore {
     }
 }
 
-fn encode_sample_value(value: &SampleValue) -> (&'static str, Option<f64>, Option<String>, Option<i64>) {
+fn encode_sample_value(
+    value: &SampleValue,
+) -> (&'static str, Option<f64>, Option<String>, Option<i64>) {
     match value {
         SampleValue::Numeric(v) => ("numeric", Some(*v), None, None),
         SampleValue::Code(v) => ("code", None, Some(v.clone()), None),
@@ -291,9 +293,9 @@ fn parse_timestamp(value: &str) -> Result<Timestamp, WarmStoreError> {
 }
 
 fn parse_source_id(value: &str) -> Result<SourceId, WarmStoreError> {
-    Ok(SourceId::from_uuid(
-        Uuid::parse_str(value).map_err(|err| WarmStoreError::Validation(err.to_string()))?,
-    ))
+    Ok(SourceId::from_uuid(Uuid::parse_str(value).map_err(
+        |err| WarmStoreError::Validation(err.to_string()),
+    )?))
 }
 
 fn pragma_usize(conn: &Connection, pragma: &str) -> Result<usize, WarmStoreError> {

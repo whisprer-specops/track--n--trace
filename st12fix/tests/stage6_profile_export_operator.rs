@@ -6,10 +6,10 @@ use skeletrace::{
     AdapterKind, AdapterProfile, CacheBudget, CliCommand, Confidence, EngineConfig, EngineProfile,
     EntityId, EntityStatus, ExportFormat, GeoBBox, GeoCoord, InterpolationMethod, MetricDefinition,
     MetricId, MetricValueType, Node, NodeKind, OperatorApi, OperatorRequest, OperatorResponse,
-    PollCadence, Priority, Quality, RetentionPolicy, Sample, SampleValue,
-    SnapshotExportJob, SnapshotExporter, SnapshotRequest, SourceHealth, SourceId, SourceKind,
-    SourceProfile, SourcePull, SourceSchedule, SqliteProfileStore, SqliteSnapshotCatalog, Tag,
-    TimeRange, ViewJob, ViewJobId, ViewKind,
+    PollCadence, Priority, Quality, RetentionPolicy, Sample, SampleValue, SnapshotExportJob,
+    SnapshotExporter, SnapshotRequest, SourceHealth, SourceId, SourceKind, SourceProfile,
+    SourcePull, SourceSchedule, SqliteProfileStore, SqliteSnapshotCatalog, Tag, TimeRange, ViewJob,
+    ViewJobId, ViewKind,
 };
 
 fn temp_path(name: &str) -> std::path::PathBuf {
@@ -215,10 +215,7 @@ fn snapshot_export_pipeline_writes_geojson_and_catalog() {
     assert!(body.contains("FeatureCollection"));
 
     let catalog = SqliteSnapshotCatalog::open(catalog_path).unwrap();
-    let manifest = catalog
-        .load_manifest(export.manifest.id)
-        .unwrap()
-        .unwrap();
+    let manifest = catalog.load_manifest(export.manifest.id).unwrap().unwrap();
     assert_eq!(manifest.size_bytes, export.manifest.size_bytes);
 }
 
@@ -257,7 +254,8 @@ fn operator_api_materializes_sparse_geo_and_cli_parses() {
             },
         )
         .unwrap();
-    api.execute(OperatorRequest::PollSource { source_id, now }).unwrap();
+    api.execute(OperatorRequest::PollSource { source_id, now })
+        .unwrap();
 
     let response = api
         .execute(OperatorRequest::MaterializeSparseGeo {

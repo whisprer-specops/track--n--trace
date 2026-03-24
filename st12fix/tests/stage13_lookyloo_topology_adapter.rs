@@ -5,9 +5,9 @@ use chrono::{TimeZone, Utc};
 use skeletrace::{
     AdapterKind, AdapterProfile, Confidence, DetailTier, EngineConfig, HttpRequestProfile,
     InterpolationMethod, LookylooMetricBindings, LookylooTopologyAdapter, LookylooTopologyConfig,
-    ManualPushAdapter, MetricDefinition, MetricId, MetricValueType, PollCadence,
-    Quality, RetentionPolicy, SkeletraceEngine, SourceDefinition, SourceHealth, SourceSchedule,
-    SourceKind, TimeRange, ViewJob, ViewJobId, ViewKind,
+    ManualPushAdapter, MetricDefinition, MetricId, MetricValueType, PollCadence, Quality,
+    RetentionPolicy, SkeletraceEngine, SourceDefinition, SourceHealth, SourceKind, SourceSchedule,
+    TimeRange, ViewJob, ViewJobId, ViewKind,
 };
 
 fn metric(id: MetricId, name: &str, value_type: MetricValueType) -> MetricDefinition {
@@ -94,7 +94,10 @@ fn lookyloo_topology_profile_builds_http_poller_adapter() {
     profile.validate().unwrap();
     let mut adapter = profile.build_adapter().unwrap();
     assert_eq!(adapter.kind(), AdapterKind::HttpPoller);
-    assert!(adapter.as_any_mut().downcast_mut::<LookylooTopologyAdapter>().is_some());
+    assert!(adapter
+        .as_any_mut()
+        .downcast_mut::<LookylooTopologyAdapter>()
+        .is_some());
 }
 
 #[test]
@@ -173,7 +176,9 @@ fn engine_ingests_lookyloo_topology_and_materializes_view() {
         .unwrap();
 
     let mut engine = SkeletraceEngine::new(EngineConfig::default()).unwrap();
-    engine.register_metric(metric(title_metric, "title", MetricValueType::Code)).unwrap();
+    engine
+        .register_metric(metric(title_metric, "title", MetricValueType::Code))
+        .unwrap();
     engine
         .register_metric(metric(
             redirect_metric,
@@ -208,12 +213,27 @@ fn engine_ingests_lookyloo_topology_and_materializes_view() {
 
     let topology = engine.materialize_topology(&view, now).unwrap();
     assert!(topology.nodes.iter().any(|n| n.label == "Capture A"));
-    assert!(topology.nodes.iter().any(|n| n.label == "root.example.test"));
+    assert!(topology
+        .nodes
+        .iter()
+        .any(|n| n.label == "root.example.test"));
     assert!(topology.nodes.iter().any(|n| n.label == "mid.example.test"));
-    assert!(topology.nodes.iter().any(|n| n.label == "final.example.test"));
+    assert!(topology
+        .nodes
+        .iter()
+        .any(|n| n.label == "final.example.test"));
     assert!(topology.edges.iter().any(|e| e.kind_label == "Association"));
     assert!(topology.edges.iter().any(|e| e.kind_label == "Route"));
-    assert!(topology.boundaries.iter().any(|b| b.label == "Category: kit"));
-    assert!(topology.boundaries.iter().any(|b| b.label == "Lookyloo No-Index"));
-    assert!(topology.boundaries.iter().any(|b| b.label == "Lookyloo Error"));
+    assert!(topology
+        .boundaries
+        .iter()
+        .any(|b| b.label == "Category: kit"));
+    assert!(topology
+        .boundaries
+        .iter()
+        .any(|b| b.label == "Lookyloo No-Index"));
+    assert!(topology
+        .boundaries
+        .iter()
+        .any(|b| b.label == "Lookyloo Error"));
 }

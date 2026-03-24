@@ -1,9 +1,9 @@
 use std::fs;
 
-use skeletrace::{run_cli_command, CliCommand, OperatorResponse};
 use skeletrace::packet_workflow::{
     PacketRenderSurface, PacketVerificationOptions, PacketVerificationRequest,
 };
+use skeletrace::{run_cli_command, CliCommand, OperatorResponse};
 
 fn temp_path(name: &str) -> std::path::PathBuf {
     let mut path = std::env::temp_dir();
@@ -63,7 +63,11 @@ fn verify_packets_cli_returns_report_and_ascii_surface() {
             assert_eq!(report.surfaces.len(), 1);
 
             match &report.surfaces[0] {
-                PacketRenderSurface::AsciiLandscape { frame, width, tick_ms } => {
+                PacketRenderSurface::AsciiLandscape {
+                    frame,
+                    width,
+                    tick_ms,
+                } => {
                     assert_eq!(*width, 24);
                     assert_eq!(*tick_ms, 200);
                     assert!(!frame.trim().is_empty());

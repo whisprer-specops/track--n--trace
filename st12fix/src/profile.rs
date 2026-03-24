@@ -14,10 +14,12 @@ use crate::adapter::{
     AdapterError, FeedPollAdapter, HttpJsonAdapter, ManualPushAdapter, NdjsonSampleFileAdapter,
     SourceAdapter, TorHttpJsonAdapter,
 };
-use crate::lookyloo::{LookylooSourceConfig, LookylooSummaryAdapter, LookylooTopologyAdapter, LookylooTopologyConfig};
 use crate::engine::{EngineConfig, EngineError, SkeletraceEngine};
 use crate::entity::{Boundary, Edge, Node};
 use crate::ingest::{AdapterKind, SourceDefinition};
+use crate::lookyloo::{
+    LookylooSourceConfig, LookylooSummaryAdapter, LookylooTopologyAdapter, LookylooTopologyConfig,
+};
 use crate::mapping::SourceMappingConfig;
 use crate::metric::MetricDefinition;
 use crate::transport::HttpRequestProfile;
@@ -256,15 +258,16 @@ impl EngineProfile {
         if let Some(parent) = path.parent() {
             fs::create_dir_all(parent).map_err(|err| ProfileError::Io(err.to_string()))?;
         }
-        let bytes = serde_json::to_vec_pretty(self).map_err(|err| ProfileError::Serde(err.to_string()))?;
+        let bytes =
+            serde_json::to_vec_pretty(self).map_err(|err| ProfileError::Serde(err.to_string()))?;
         fs::write(path, bytes).map_err(|err| ProfileError::Io(err.to_string()))?;
         Ok(())
     }
 
     pub fn load_json_file(path: impl AsRef<Path>) -> Result<Self, ProfileError> {
         let bytes = fs::read(path).map_err(|err| ProfileError::Io(err.to_string()))?;
-        let profile: Self = serde_json::from_slice(&bytes)
-            .map_err(|err| ProfileError::Serde(err.to_string()))?;
+        let profile: Self =
+            serde_json::from_slice(&bytes).map_err(|err| ProfileError::Serde(err.to_string()))?;
         profile.validate()?;
         Ok(profile)
     }
@@ -335,9 +338,14 @@ impl SqliteProfileStore {
         Ok(())
     }
 
-    pub fn save_profile(&self, profile: &EngineProfile, now: Timestamp) -> Result<(), ProfileError> {
+    pub fn save_profile(
+        &self,
+        profile: &EngineProfile,
+        now: Timestamp,
+    ) -> Result<(), ProfileError> {
         profile.validate()?;
-        let json = serde_json::to_string(profile).map_err(|err| ProfileError::Serde(err.to_string()))?;
+        let json =
+            serde_json::to_string(profile).map_err(|err| ProfileError::Serde(err.to_string()))?;
         self.conn.execute(
             "
             INSERT INTO profiles(name, saved_at, json)
@@ -350,12 +358,14 @@ impl SqliteProfileStore {
     }
 
     pub fn load_profile(&self, name: &str) -> Result<Option<EngineProfile>, ProfileError> {
-        let mut stmt = self.conn.prepare("SELECT json FROM profiles WHERE name = ?1")?;
+        let mut stmt = self
+            .conn
+            .prepare("SELECT json FROM profiles WHERE name = ?1")?;
         let mut rows = stmt.query(params![name])?;
         if let Some(row) = rows.next()? {
             let json: String = row.get(0)?;
-            let profile: EngineProfile = serde_json::from_str(&json)
-                .map_err(|err| ProfileError::Serde(err.to_string()))?;
+            let profile: EngineProfile =
+                serde_json::from_str(&json).map_err(|err| ProfileError::Serde(err.to_string()))?;
             profile.validate()?;
             Ok(Some(profile))
         } else {

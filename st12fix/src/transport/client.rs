@@ -284,9 +284,7 @@ impl TransportClient {
         // 1. Circuit breaker check.
         let circuit_state = match self.circuit_breaker.check(&domain) {
             CircuitCheck::Allowed(state) => state,
-            CircuitCheck::Blocked {
-                remaining_cooldown,
-            } => {
+            CircuitCheck::Blocked { remaining_cooldown } => {
                 return Err(TransportError::CircuitOpen {
                     domain,
                     remaining_cooldown_ms: remaining_cooldown.as_millis() as u64,
@@ -346,8 +344,7 @@ impl TransportClient {
 
                     let is_retriable = retriable
                         && (retry_policy.retry_on_transport_error
-                            || status_code
-                                .map_or(false, |s| retry_policy.should_retry_status(s)));
+                            || status_code.map_or(false, |s| retry_policy.should_retry_status(s)));
 
                     match evaluate_retry(&retry_policy, attempt, is_retriable, retry_after) {
                         RetryDecision::Retry(delay) => {
@@ -414,9 +411,8 @@ impl TransportClient {
             .timeout_write(profile.timeout);
 
         if let Some(proxy_url) = profile.proxy_route.proxy_url() {
-            let proxy = ureq::Proxy::new(proxy_url).map_err(|err| {
-                (false, None, format!("proxy config error: {err}"), None)
-            })?;
+            let proxy = ureq::Proxy::new(proxy_url)
+                .map_err(|err| (false, None, format!("proxy config error: {err}"), None))?;
             builder = builder.proxy(proxy);
         }
 
@@ -443,9 +439,7 @@ impl TransportClient {
                 Ok((status, headers, body))
             }
             Err(ureq::Error::Status(code, response)) => {
-                let retry_after = response
-                    .header("Retry-After")
-                    .and_then(parse_retry_after);
+                let retry_after = response.header("Retry-After").and_then(parse_retry_after);
                 let msg = response
                     .into_string()
                     .unwrap_or_else(|_| format!("HTTP {code}"));
@@ -522,7 +516,10 @@ mod tests {
         client.register_domain("api.example.com", SourceClass::SafeDefault);
         client.register_domain("dark.onion", SourceClass::Gated);
 
-        assert_eq!(client.circuit_state("api.example.com"), CircuitState::Closed);
+        assert_eq!(
+            client.circuit_state("api.example.com"),
+            CircuitState::Closed
+        );
         assert_eq!(client.circuit_state("dark.onion"), CircuitState::Closed);
     }
 

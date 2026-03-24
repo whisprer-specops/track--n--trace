@@ -37,7 +37,9 @@ impl GeoCoord {
         }
         if let Some(alt) = alt {
             if !alt.is_finite() {
-                return Err(ValidationError::InvalidState("altitude must be finite".into()));
+                return Err(ValidationError::InvalidState(
+                    "altitude must be finite".into(),
+                ));
             }
         }
         Ok(Self { lat, lon, alt })
@@ -77,7 +79,9 @@ impl GeoCoord {
 
     pub fn from_ecef(cart: CartesianCoord, ellipsoid: Ellipsoid) -> Result<Self, ValidationError> {
         if !cart.x.is_finite() || !cart.y.is_finite() || !cart.z.is_finite() {
-            return Err(ValidationError::InvalidState("ECEF coordinates must be finite".into()));
+            return Err(ValidationError::InvalidState(
+                "ECEF coordinates must be finite".into(),
+            ));
         }
 
         let a = ellipsoid.semi_major;
@@ -90,8 +94,7 @@ impl GeoCoord {
         let sin_theta = theta.sin();
         let cos_theta = theta.cos();
 
-        let lat = (cart.z + ep_sq * b * sin_theta.powi(3))
-            .atan2(p - e_sq * a * cos_theta.powi(3));
+        let lat = (cart.z + ep_sq * b * sin_theta.powi(3)).atan2(p - e_sq * a * cos_theta.powi(3));
         let lon = cart.y.atan2(cart.x);
 
         let sin_lat = lat.sin();

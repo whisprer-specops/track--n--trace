@@ -7,10 +7,9 @@ use std::time::Duration;
 
 use chrono::{TimeDelta, Utc};
 use skeletrace::{
-    AdapterKind, EntityId, EngineStore, FeedField, FeedPollAdapter, HttpJsonAdapter,
-    SourceAdapter,
-    InterpolationMethod, MetricBinding, MetricDefinition, MetricId, MetricValueType,
-    PollCadence, Quality, RetentionPolicy, Sample, SampleValue, SourceDefinition, SourceHealth,
+    AdapterKind, EngineStore, EntityId, FeedField, FeedPollAdapter, HttpJsonAdapter,
+    InterpolationMethod, MetricBinding, MetricDefinition, MetricId, MetricValueType, PollCadence,
+    Quality, RetentionPolicy, Sample, SampleValue, SourceAdapter, SourceDefinition, SourceHealth,
     SourceId, SourceKind, SourceMappingConfig, SourceSchedule, TimeRange, ValueSelector,
 };
 use uuid::Uuid;
@@ -219,7 +218,10 @@ fn http_json_adapter_maps_numeric_and_code_fields() {
     assert_eq!(pull.touched_entities, vec![entity_id]);
 
     let mut metrics = HashMap::new();
-    metrics.insert(metric_score, numeric_metric(metric_score, source_id, "score"));
+    metrics.insert(
+        metric_score,
+        numeric_metric(metric_score, source_id, "score"),
+    );
     metrics.insert(metric_label, code_metric(metric_label, source_id, "label"));
     pull.validate_against(&metrics).unwrap();
 }

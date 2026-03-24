@@ -39,8 +39,6 @@ impl ReplayHarness {
             .map_or(0, VecDeque::len)
     }
 
-
-
     #[must_use]
     pub fn total_pending(&self) -> usize {
         self.batches_by_source.values().map(VecDeque::len).sum()
@@ -50,11 +48,7 @@ impl ReplayHarness {
     pub fn is_empty(&self) -> bool {
         self.batches_by_source.is_empty()
     }
-    pub fn drain_ready_for(
-        &mut self,
-        source_id: SourceId,
-        now: Timestamp,
-    ) -> Vec<SourcePull> {
+    pub fn drain_ready_for(&mut self, source_id: SourceId, now: Timestamp) -> Vec<SourcePull> {
         let Some(queue) = self.batches_by_source.get_mut(&source_id) else {
             return Vec::new();
         };

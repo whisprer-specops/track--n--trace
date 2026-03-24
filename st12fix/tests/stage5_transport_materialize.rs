@@ -10,10 +10,9 @@ use skeletrace::{
     EngineStore, EntityId, EntityMapping, EntityStatus, GeoBBox, GeoCoord, HeaderPair,
     HttpJsonAdapter, HttpRequestProfile, InterpolationMethod, MetricBinding, MetricDefinition,
     MetricId, MetricValueType, Node, NodeKind, PollCadence, Priority, ProxyRoute, Quality,
-    RetentionPolicy, Sample, SampleValue, SourceAdapter, SourceDefinition, SourceHealth,
-    SourceId, SourceKind, SourceMappingConfig, SourceSchedule, SparseGeoMaterializer, Tag,
-    TimeRange, TopologyMaterializer, TorHttpJsonAdapter, ValueSelector, ViewJob, ViewJobId,
-    ViewKind,
+    RetentionPolicy, Sample, SampleValue, SourceAdapter, SourceDefinition, SourceHealth, SourceId,
+    SourceKind, SourceMappingConfig, SourceSchedule, SparseGeoMaterializer, Tag, TimeRange,
+    TopologyMaterializer, TorHttpJsonAdapter, ValueSelector, ViewJob, ViewJobId, ViewKind,
 };
 
 fn numeric_metric(metric_id: MetricId, source_id: SourceId, name: &str) -> MetricDefinition {
@@ -91,7 +90,8 @@ fn spawn_request_recording_server(
         if let Ok((mut stream, _)) = listener.accept() {
             let mut request_buf = [0u8; 8192];
             let read = stream.read(&mut request_buf).unwrap_or(0);
-            *captured_clone.lock().unwrap() = String::from_utf8_lossy(&request_buf[..read]).into_owned();
+            *captured_clone.lock().unwrap() =
+                String::from_utf8_lossy(&request_buf[..read]).into_owned();
             let response = format!(
                 "HTTP/1.1 200 OK\r\nContent-Type: {content_type}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
                 body.len(),
@@ -110,10 +110,8 @@ fn http_adapter_applies_headers_and_auth() {
     let entity_id = EntityId::new();
     let metric_id = MetricId::new();
 
-    let (endpoint, captured, handle) = spawn_request_recording_server(
-        r#"{"score":42.0}"#.to_string(),
-        "application/json",
-    );
+    let (endpoint, captured, handle) =
+        spawn_request_recording_server(r#"{"score":42.0}"#.to_string(), "application/json");
 
     let mapping = SourceMappingConfig {
         entity_mapping: EntityMapping::Static(entity_id),
@@ -142,7 +140,12 @@ fn http_adapter_applies_headers_and_auth() {
     };
 
     let mut adapter = HttpJsonAdapter::with_request_profile(mapping, profile).unwrap();
-    let pull = adapter.pull(&source(source_id, AdapterKind::HttpPoller, endpoint), Utc::now()).unwrap();
+    let pull = adapter
+        .pull(
+            &source(source_id, AdapterKind::HttpPoller, endpoint),
+            Utc::now(),
+        )
+        .unwrap();
     handle.join().unwrap();
 
     let request = captured.lock().unwrap().to_ascii_lowercase();
@@ -167,7 +170,12 @@ fn tor_http_adapter_uses_tor_kind() {
 
     let adapter = TorHttpJsonAdapter::new(mapping, Duration::from_secs(3)).unwrap();
     assert_eq!(adapter.kind(), AdapterKind::TorHttpPoller);
-    assert_eq!(HttpRequestProfile::tor_default(Duration::from_secs(1)).proxy_route.proxy_url(), Some("socks5://127.0.0.1:9050"));
+    assert_eq!(
+        HttpRequestProfile::tor_default(Duration::from_secs(1))
+            .proxy_route
+            .proxy_url(),
+        Some("socks5://127.0.0.1:9050")
+    );
 }
 
 #[test]
@@ -181,65 +189,98 @@ fn topology_and_sparse_geo_materializers_emit_expected_shapes() {
     let boundary_id = EntityId::new();
 
     let mut store = EngineStore::new();
-    store.register_source(source(source_id, AdapterKind::Manual, String::new())).unwrap();
-    store.register_metric(numeric_metric(metric_id, source_id, "volume")).unwrap();
+    store
+        .register_source(source(source_id, AdapterKind::Manual, String::new()))
+        .unwrap();
+    store
+        .register_metric(numeric_metric(metric_id, source_id, "volume"))
+        .unwrap();
 
-    store.upsert_node(Node {
-        id: node_a,
-        kind: NodeKind::Identity,
-        label: "alpha".into(),
-        position: Some(GeoCoord::new(51.5, -0.1, None).unwrap()),
-        position_confidence: Confidence::new(0.9).unwrap(),
-        status: EntityStatus::Active,
-        priority: Priority::HIGH,
-        tags: vec![Tag::new("role", "source").unwrap()],
-        first_seen: now,
-        last_seen: now,
-    }).unwrap();
-    store.upsert_node(Node {
-        id: node_b,
-        kind: NodeKind::Identity,
-        label: "beta".into(),
-        position: Some(GeoCoord::new(48.85, 2.35, None).unwrap()),
-        position_confidence: Confidence::new(0.9).unwrap(),
-        status: EntityStatus::Active,
-        priority: Priority::HIGH,
-        tags: vec![Tag::new("role", "target").unwrap()],
-        first_seen: now,
-        last_seen: now,
-    }).unwrap();
-    store.upsert_edge(Edge {
-        id: edge_id,
-        kind: EdgeKind::Route,
-        direction: EdgeDirection::Directed,
-        source: node_a,
-        target: node_b,
-        geometry_mode: skeletrace::GeometryMode::Geodesic,
-        waypoints: vec![],
-        confidence: Confidence::new(0.8).unwrap(),
-        status: EntityStatus::Active,
-        priority: Priority::NORMAL,
-        tags: vec![],
-        first_seen: now,
-        last_seen: now,
-    }).unwrap();
-    store.upsert_boundary(Boundary {
-        id: boundary_id,
-        kind: BoundaryKind::NetworkZone,
-        label: "seam".into(),
-        extent: Some(GeoBBox::new(45.0, -5.0, 55.0, 5.0).unwrap()),
-        related_entities: vec![node_a, node_b],
-        confidence: Confidence::new(0.7).unwrap(),
-        status: EntityStatus::Active,
-        priority: Priority::NORMAL,
-        tags: vec![],
-        first_seen: now,
-        last_seen: now,
-    }).unwrap();
+    store
+        .upsert_node(Node {
+            id: node_a,
+            kind: NodeKind::Identity,
+            label: "alpha".into(),
+            position: Some(GeoCoord::new(51.5, -0.1, None).unwrap()),
+            position_confidence: Confidence::new(0.9).unwrap(),
+            status: EntityStatus::Active,
+            priority: Priority::HIGH,
+            tags: vec![Tag::new("role", "source").unwrap()],
+            first_seen: now,
+            last_seen: now,
+        })
+        .unwrap();
+    store
+        .upsert_node(Node {
+            id: node_b,
+            kind: NodeKind::Identity,
+            label: "beta".into(),
+            position: Some(GeoCoord::new(48.85, 2.35, None).unwrap()),
+            position_confidence: Confidence::new(0.9).unwrap(),
+            status: EntityStatus::Active,
+            priority: Priority::HIGH,
+            tags: vec![Tag::new("role", "target").unwrap()],
+            first_seen: now,
+            last_seen: now,
+        })
+        .unwrap();
+    store
+        .upsert_edge(Edge {
+            id: edge_id,
+            kind: EdgeKind::Route,
+            direction: EdgeDirection::Directed,
+            source: node_a,
+            target: node_b,
+            geometry_mode: skeletrace::GeometryMode::Geodesic,
+            waypoints: vec![],
+            confidence: Confidence::new(0.8).unwrap(),
+            status: EntityStatus::Active,
+            priority: Priority::NORMAL,
+            tags: vec![],
+            first_seen: now,
+            last_seen: now,
+        })
+        .unwrap();
+    store
+        .upsert_boundary(Boundary {
+            id: boundary_id,
+            kind: BoundaryKind::NetworkZone,
+            label: "seam".into(),
+            extent: Some(GeoBBox::new(45.0, -5.0, 55.0, 5.0).unwrap()),
+            related_entities: vec![node_a, node_b],
+            confidence: Confidence::new(0.7).unwrap(),
+            status: EntityStatus::Active,
+            priority: Priority::NORMAL,
+            tags: vec![],
+            first_seen: now,
+            last_seen: now,
+        })
+        .unwrap();
 
-    store.ingest_sample(sample(node_a, metric_id, source_id, SampleValue::Numeric(11.0))).unwrap();
-    store.ingest_sample(sample(edge_id, metric_id, source_id, SampleValue::Numeric(22.0))).unwrap();
-    store.ingest_sample(sample(boundary_id, metric_id, source_id, SampleValue::Numeric(33.0))).unwrap();
+    store
+        .ingest_sample(sample(
+            node_a,
+            metric_id,
+            source_id,
+            SampleValue::Numeric(11.0),
+        ))
+        .unwrap();
+    store
+        .ingest_sample(sample(
+            edge_id,
+            metric_id,
+            source_id,
+            SampleValue::Numeric(22.0),
+        ))
+        .unwrap();
+    store
+        .ingest_sample(sample(
+            boundary_id,
+            metric_id,
+            source_id,
+            SampleValue::Numeric(33.0),
+        ))
+        .unwrap();
 
     let topology_view = ViewJob {
         id: ViewJobId::new(),
@@ -254,7 +295,14 @@ fn topology_and_sparse_geo_materializers_emit_expected_shapes() {
     assert_eq!(topology.nodes.len(), 2);
     assert_eq!(topology.edges.len(), 1);
     assert_eq!(topology.boundaries.len(), 1);
-    assert_eq!(topology.nodes.iter().map(|node| node.metrics.len()).sum::<usize>(), 1);
+    assert_eq!(
+        topology
+            .nodes
+            .iter()
+            .map(|node| node.metrics.len())
+            .sum::<usize>(),
+        1
+    );
 
     let sparse_view = ViewJob {
         id: ViewJobId::new(),
@@ -269,5 +317,11 @@ fn topology_and_sparse_geo_materializers_emit_expected_shapes() {
     let feature_collection = sparse.to_feature_collection();
     assert_eq!(feature_collection.feature_count, 4);
     assert_eq!(feature_collection.geojson["type"], "FeatureCollection");
-    assert_eq!(feature_collection.geojson["features"].as_array().unwrap().len(), 4);
+    assert_eq!(
+        feature_collection.geojson["features"]
+            .as_array()
+            .unwrap()
+            .len(),
+        4
+    );
 }

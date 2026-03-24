@@ -120,7 +120,10 @@ impl SnapshotExporter {
             Some(path) => Some(SqliteSnapshotCatalog::open(path)?),
             None => None,
         };
-        Ok(Self { output_dir, catalog })
+        Ok(Self {
+            output_dir,
+            catalog,
+        })
     }
 
     pub fn export(
@@ -138,9 +141,9 @@ impl SnapshotExporter {
             .output_stem
             .clone()
             .unwrap_or_else(|| snapshot_id.to_string());
-        let path = self
-            .output_dir
-            .join(format!("{}.{}", stem, job.request.format.file_extension()));
+        let path =
+            self.output_dir
+                .join(format!("{}.{}", stem, job.request.format.file_extension()));
         fs::write(&path, &bytes).map_err(|err| ExportError::Io(err.to_string()))?;
         let metadata = fs::metadata(&path).map_err(|err| ExportError::Io(err.to_string()))?;
         if metadata.len() != bytes.len() as u64 {
@@ -196,7 +199,9 @@ fn materialize_payload(
             MaterializedSnapshotPayload::Topology(engine.materialize_topology(&job.view, now)?)
         }
         ViewKind::SparseGeo => MaterializedSnapshotPayload::SparseGeo(
-            engine.materialize_sparse_geo(&job.view, now)?.to_feature_collection(),
+            engine
+                .materialize_sparse_geo(&job.view, now)?
+                .to_feature_collection(),
         ),
         ViewKind::DataCard | ViewKind::Compare | ViewKind::Timeline | ViewKind::SnapshotExport => {
             let mut cards = Vec::new();
@@ -235,11 +240,14 @@ fn serialize_payload(
     format: ExportFormat,
 ) -> Result<Vec<u8>, ExportError> {
     match format {
-        ExportFormat::NativeJson => serde_json::to_vec_pretty(payload)
-            .map_err(|err| ExportError::Serde(err.to_string())),
+        ExportFormat::NativeJson => {
+            serde_json::to_vec_pretty(payload).map_err(|err| ExportError::Serde(err.to_string()))
+        }
         ExportFormat::GeoJson => match payload {
-            MaterializedSnapshotPayload::SparseGeo(collection) => serde_json::to_vec_pretty(&collection.geojson)
-                .map_err(|err| ExportError::Serde(err.to_string())),
+            MaterializedSnapshotPayload::SparseGeo(collection) => {
+                serde_json::to_vec_pretty(&collection.geojson)
+                    .map_err(|err| ExportError::Serde(err.to_string()))
+            }
             _ => Err(ExportError::Unsupported(
                 "GeoJSON export is only supported for sparse-geo materializations".into(),
             )),
@@ -377,14 +385,19 @@ impl SqliteSnapshotCatalog {
 
     pub fn upsert_manifest(&self, manifest: &SnapshotManifest) -> Result<(), ExportError> {
         manifest.validate()?;
-        let json = serde_json::to_string(manifest).map_err(|err| ExportError::Serde(err.to_string()))?;
+        let json =
+            serde_json::to_string(manifest).map_err(|err| ExportError::Serde(err.to_string()))?;
         self.conn.execute(
             "
             INSERT INTO snapshot_manifests(id, created_at, json)
             VALUES(?1, ?2, ?3)
             ON CONFLICT(id) DO UPDATE SET created_at = excluded.created_at, json = excluded.json
             ",
-            params![manifest.id.to_string(), manifest.created_at.to_rfc3339(), json],
+            params![
+                manifest.id.to_string(),
+                manifest.created_at.to_rfc3339(),
+                json
+            ],
         )?;
         Ok(())
     }
@@ -396,8 +409,8 @@ impl SqliteSnapshotCatalog {
         let mut rows = stmt.query(params![id.to_string()])?;
         if let Some(row) = rows.next()? {
             let json: String = row.get(0)?;
-            let manifest: SnapshotManifest = serde_json::from_str(&json)
-                .map_err(|err| ExportError::Serde(err.to_string()))?;
+            let manifest: SnapshotManifest =
+                serde_json::from_str(&json).map_err(|err| ExportError::Serde(err.to_string()))?;
             manifest.validate()?;
             Ok(Some(manifest))
         } else {
@@ -413,8 +426,8 @@ impl SqliteSnapshotCatalog {
         let mut out = Vec::new();
         for row in rows {
             let json = row?;
-            let manifest: SnapshotManifest = serde_json::from_str(&json)
-                .map_err(|err| ExportError::Serde(err.to_string()))?;
+            let manifest: SnapshotManifest =
+                serde_json::from_str(&json).map_err(|err| ExportError::Serde(err.to_string()))?;
             manifest.validate()?;
             out.push(manifest);
         }

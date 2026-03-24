@@ -5,10 +5,10 @@ use skeletrace::{
     AdapterKind, AdapterProfile, Confidence, EngineConfig, EngineProfile, EngineStore, EntityId,
     EntityStatus, FlowId, GeoCoord, InterpolationMethod, MetricDefinition, MetricId,
     MetricValueType, OperatorApi, OperatorRequest, OperatorResponse, PollCadence, Priority,
-    Quality, ReplayBatch, ReplayBenchmarkRequest, ReplayWorkloadRequest, RetentionPolicy,
-    RawIngestRecord, Sample, SampleValue, SnapshotExporter, SourceDefinition, SourceHealth, SourceId,
-    SourceKind, SourceProfile, SourcePull, SourceSchedule, Tag, TimeRange, ViewJob, ViewJobId,
-    ViewKind,
+    Quality, RawIngestRecord, ReplayBatch, ReplayBenchmarkRequest, ReplayWorkloadRequest,
+    RetentionPolicy, Sample, SampleValue, SnapshotExporter, SourceDefinition, SourceHealth,
+    SourceId, SourceKind, SourceProfile, SourcePull, SourceSchedule, Tag, TimeRange, ViewJob,
+    ViewJobId, ViewKind,
 };
 
 fn manual_source(source_id: SourceId) -> SourceDefinition {
@@ -141,7 +141,8 @@ fn benchmark_replay_workload_uses_fresh_profile_iterations() {
         }],
     };
 
-    let exporter = SnapshotExporter::new(temp_dir.join("exports"), None::<std::path::PathBuf>).unwrap();
+    let exporter =
+        SnapshotExporter::new(temp_dir.join("exports"), None::<std::path::PathBuf>).unwrap();
     let mut api = OperatorApi::from_profile(&profile, exporter, now).unwrap();
 
     let request = ReplayBenchmarkRequest {
@@ -202,16 +203,11 @@ fn warm_store_report_and_optimize_are_operator_visible() {
     let mut config = EngineConfig::default();
     config.warm_store_path = Some(temp_dir.join("warm.sqlite"));
 
-    let profile = profile_with_manual_source(
-        "warm-profile",
-        config,
-        source_id,
-        metric_id,
-        entity_id,
-        now,
-    );
+    let profile =
+        profile_with_manual_source("warm-profile", config, source_id, metric_id, entity_id, now);
 
-    let exporter = SnapshotExporter::new(temp_dir.join("exports"), None::<std::path::PathBuf>).unwrap();
+    let exporter =
+        SnapshotExporter::new(temp_dir.join("exports"), None::<std::path::PathBuf>).unwrap();
     let mut api = OperatorApi::from_profile(&profile, exporter, now).unwrap();
 
     api.engine_mut()
@@ -259,7 +255,9 @@ fn store_batch_ingest_reports_counts() {
 
     let mut store = EngineStore::new();
     store.register_source(manual_source(source_id)).unwrap();
-    store.register_metric(numeric_metric(metric_id, source_id, "volume")).unwrap();
+    store
+        .register_metric(numeric_metric(metric_id, source_id, "volume"))
+        .unwrap();
 
     let raw = RawIngestRecord {
         source_id,

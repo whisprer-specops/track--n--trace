@@ -263,7 +263,11 @@ fn collect_metrics(
         .collect()
 }
 
-fn edge_coords_in_view(store: &EngineStore, edge: &Edge, viewport: GeoBBox) -> Option<Vec<GeoCoord>> {
+fn edge_coords_in_view(
+    store: &EngineStore,
+    edge: &Edge,
+    viewport: GeoBBox,
+) -> Option<Vec<GeoCoord>> {
     let mut coords = Vec::new();
     if let Some(position) = store.node(edge.source).and_then(|node| node.position) {
         coords.push(position);

@@ -11,21 +11,18 @@ use crate::export::{ExportError, SnapshotExportJob, SnapshotExportResult, Snapsh
 use crate::governance::{AuditRecord, FailureRecord, SourceCapabilityProfile, SourcePolicy};
 use crate::materialize::{SparseGeoFeatureCollection, TopologyViewMaterialization};
 use crate::packet_workflow::{
-    verify_packet_request, PacketVerificationReport, PacketWorkflowError,
-    PacketVerificationRequest,
+    verify_packet_request, PacketVerificationReport, PacketVerificationRequest,
+    PacketWorkflowError,
 };
 use crate::metric::{MetricRetentionReport, RetentionTuning};
 use crate::observability::EngineEvent;
-use crate::profile::{EngineProfile, ProfileError};
 use crate::profiling::{DurationStats, EngineHealthReport, PerfProbeConfig, PerfProbeReport};
-use crate::query::{QueryFilter, QueryResult, Watchlist, WatchlistEvaluation};
+use crate::profile::{EngineProfile, ProfileError};
+use crate::query::{QueryFilter, QueryRequest, QueryResult, QueryResultEnvelope, SavedQuery, Watchlist, WatchlistEvaluation};
 use crate::types::{EntityId, MetricId, SourceId, Timestamp, ValidationError};
 use crate::view::{DataCard, ViewJob};
 use crate::warm_store::WarmStoreMaintenanceReport;
-use crate::workload::{
-    ReplayBenchmarkReport, ReplayBenchmarkRequest, ReplayWorkloadRequest, WorkloadFixture,
-    WorkloadRunReport,
-};
+use crate::workload::{ReplayBenchmarkReport, ReplayBenchmarkRequest, ReplayWorkloadRequest, WorkloadFixture, WorkloadRunReport};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum OperatorError {
@@ -139,9 +136,10 @@ impl OperatorApi {
     ) -> Result<ReplayBenchmarkReport, OperatorError> {
         fixture.validate()?;
         request.validate()?;
-        let profile = self.base_profile.as_ref().ok_or_else(|| {
-            OperatorError::Cli("benchmarking requires an operator created from a profile".into())
-        })?;
+        let profile = self
+            .base_profile
+            .as_ref()
+            .ok_or_else(|| OperatorError::Cli("benchmarking requires an operator created from a profile".into()))?;
 
         let started_at = now;
         let mut stats = DurationStats::default();
@@ -220,6 +218,9 @@ impl OperatorApi {
             OperatorRequest::QueryLatest { filter, now } => {
                 OperatorResponse::Query(self.engine.query_latest(&filter, now)?)
             }
+            OperatorRequest::QueryAdvanced { request, now } => {
+                OperatorResponse::QueryEnvelope(self.engine.query_request(&request, now)?)
+            }
             OperatorRequest::EvaluateWatchlist { watchlist, now } => {
                 OperatorResponse::Watchlist(self.engine.evaluate_watchlist(&watchlist, now)?)
             }
@@ -229,18 +230,14 @@ impl OperatorApi {
             OperatorRequest::RecentEvents { limit } => {
                 OperatorResponse::Events(self.engine.recent_events(limit))
             }
-            OperatorRequest::TuneMetricRetention {
-                metric_id,
-                tuning,
-                now,
-            } => OperatorResponse::RetentionReport(
-                self.engine
-                    .retune_metric_retention(metric_id, tuning, now)?,
-            ),
-            OperatorRequest::ProfileView { view, now, config } => OperatorResponse::Perf(
-                self.engine
-                    .profile_view_materialization(&view, now, config)?,
-            ),
+            OperatorRequest::TuneMetricRetention { metric_id, tuning, now } => {
+                OperatorResponse::RetentionReport(
+                    self.engine.retune_metric_retention(metric_id, tuning, now)?,
+                )
+            }
+            OperatorRequest::ProfileView { view, now, config } => {
+                OperatorResponse::Perf(self.engine.profile_view_materialization(&view, now, config)?)
+            }
             OperatorRequest::RecentAudit { limit } => {
                 OperatorResponse::Audit(self.engine.recent_audit_records(limit))
             }
@@ -251,10 +248,7 @@ impl OperatorApi {
                 self.engine.set_source_policy(policy);
                 OperatorResponse::SourcePolicy(policy)
             }
-            OperatorRequest::SetSourceCapability {
-                source_id,
-                capability,
-            } => {
+            OperatorRequest::SetSourceCapability { source_id, capability } => {
                 self.engine.set_source_capability(source_id, capability)?;
                 OperatorResponse::SourceCapability(capability)
             }
@@ -269,61 +263,32 @@ impl OperatorApi {
                 let mut harness = fixture.into_harness();
                 OperatorResponse::Workload(self.engine.run_replay_workload(&mut harness, &request)?)
             }
-            OperatorRequest::BenchmarkReplayWorkload {
-                fixture,
-                request,
-                now,
-            } => OperatorResponse::ReplayBenchmark(
-                self.benchmark_replay_workload(&fixture, &request, now)?,
-            ),
+            OperatorRequest::BenchmarkReplayWorkload { fixture, request, now } => {
+                OperatorResponse::ReplayBenchmark(self.benchmark_replay_workload(&fixture, &request, now)?)
+            }
         })
     }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum OperatorRequest {
-    VerifyPackets {
-        request: PacketVerificationRequest,
-    },
-    Tick {
-        now: Timestamp,
-    },
-    PollSource {
-        source_id: SourceId,
-        now: Timestamp,
-    },
-    MaterializeTopology {
-        view: ViewJob,
-        now: Timestamp,
-    },
-    MaterializeSparseGeo {
-        view: ViewJob,
-        now: Timestamp,
-    },
+    VerifyPackets { request: PacketVerificationRequest },
+    Tick { now: Timestamp },
+    PollSource { source_id: SourceId, now: Timestamp },
+    MaterializeTopology { view: ViewJob, now: Timestamp },
+    MaterializeSparseGeo { view: ViewJob, now: Timestamp },
     HydrateDataCard {
         entity_id: EntityId,
         metrics: Vec<MetricId>,
         now: Timestamp,
         time_range: crate::view::TimeRange,
     },
-    ExportSnapshot {
-        job: SnapshotExportJob,
-        now: Timestamp,
-    },
-    QueryLatest {
-        filter: QueryFilter,
-        now: Timestamp,
-    },
-    EvaluateWatchlist {
-        watchlist: Watchlist,
-        now: Timestamp,
-    },
-    HealthReport {
-        now: Timestamp,
-    },
-    RecentEvents {
-        limit: usize,
-    },
+    ExportSnapshot { job: SnapshotExportJob, now: Timestamp },
+    QueryLatest { filter: QueryFilter, now: Timestamp },
+    QueryAdvanced { request: QueryRequest, now: Timestamp },
+    EvaluateWatchlist { watchlist: Watchlist, now: Timestamp },
+    HealthReport { now: Timestamp },
+    RecentEvents { limit: usize },
     TuneMetricRetention {
         metric_id: MetricId,
         tuning: RetentionTuning,
@@ -334,15 +299,9 @@ pub enum OperatorRequest {
         now: Timestamp,
         config: PerfProbeConfig,
     },
-    RecentAudit {
-        limit: usize,
-    },
-    RecentFailures {
-        limit: usize,
-    },
-    SetSourcePolicy {
-        policy: SourcePolicy,
-    },
+    RecentAudit { limit: usize },
+    RecentFailures { limit: usize },
+    SetSourcePolicy { policy: SourcePolicy },
     SetSourceCapability {
         source_id: SourceId,
         capability: SourceCapabilityProfile,
@@ -364,13 +323,14 @@ pub enum OperatorRequest {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum OperatorResponse {
-    PacketVerification(PacketVerificationReport),
     Tick(TickReport),
     Topology(TopologyViewMaterialization),
     SparseGeo(SparseGeoFeatureCollection),
     DataCard(DataCard),
     Export(SnapshotExportResult),
     Query(QueryResult),
+    QueryEnvelope(QueryResultEnvelope),
+    PacketVerification(PacketVerificationReport),
     Watchlist(WatchlistEvaluation),
     HealthReport(EngineHealthReport),
     Events(Vec<EngineEvent>),
@@ -387,44 +347,17 @@ pub enum OperatorResponse {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CliCommand {
-    VerifyPackets {
-        request_path: PathBuf,
-    },
-    ValidateProfile {
-        profile_path: PathBuf,
-    },
-    Tick {
-        profile_path: PathBuf,
-    },
-    PollSource {
-        profile_path: PathBuf,
-        source_id: String,
-    },
-    MaterializeTopology {
-        profile_path: PathBuf,
-        view_path: PathBuf,
-    },
-    MaterializeSparseGeo {
-        profile_path: PathBuf,
-        view_path: PathBuf,
-    },
-    ExportSnapshot {
-        profile_path: PathBuf,
-        job_path: PathBuf,
-        output_dir: PathBuf,
-        catalog_path: Option<PathBuf>,
-    },
-    QueryLatest {
-        profile_path: PathBuf,
-        filter_path: PathBuf,
-    },
-    EvaluateWatchlist {
-        profile_path: PathBuf,
-        watchlist_path: PathBuf,
-    },
-    Health {
-        profile_path: PathBuf,
-    },
+    ValidateProfile { profile_path: PathBuf },
+    VerifyPackets { request_path: PathBuf },
+    Tick { profile_path: PathBuf },
+    PollSource { profile_path: PathBuf, source_id: String },
+    MaterializeTopology { profile_path: PathBuf, view_path: PathBuf },
+    MaterializeSparseGeo { profile_path: PathBuf, view_path: PathBuf },
+    ExportSnapshot { profile_path: PathBuf, job_path: PathBuf, output_dir: PathBuf, catalog_path: Option<PathBuf> },
+    QueryLatest { profile_path: PathBuf, filter_path: PathBuf },
+    QueryAdvanced { profile_path: PathBuf, request_path: PathBuf },
+    EvaluateWatchlist { profile_path: PathBuf, watchlist_path: PathBuf },
+    Health { profile_path: PathBuf },
 }
 
 impl CliCommand {
@@ -438,11 +371,11 @@ impl CliCommand {
             return Err(OperatorError::Cli("missing subcommand".into()));
         }
         match values[1].as_str() {
-            "verify-packets" if values.len() == 3 => Ok(Self::VerifyPackets {
-                request_path: PathBuf::from(&values[2]),
-            }),
             "profile-validate" if values.len() == 3 => Ok(Self::ValidateProfile {
                 profile_path: PathBuf::from(&values[2]),
+            }),
+            "verify-packets" if values.len() == 3 => Ok(Self::VerifyPackets {
+                request_path: PathBuf::from(&values[2]),
             }),
             "tick" if values.len() == 3 => Ok(Self::Tick {
                 profile_path: PathBuf::from(&values[2]),
@@ -459,17 +392,19 @@ impl CliCommand {
                 profile_path: PathBuf::from(&values[2]),
                 view_path: PathBuf::from(&values[3]),
             }),
-            "export-snapshot" if values.len() == 5 || values.len() == 6 => {
-                Ok(Self::ExportSnapshot {
-                    profile_path: PathBuf::from(&values[2]),
-                    job_path: PathBuf::from(&values[3]),
-                    output_dir: PathBuf::from(&values[4]),
-                    catalog_path: values.get(5).map(|v| PathBuf::from(v.as_str())),
-                })
-            }
+            "export-snapshot" if values.len() == 5 || values.len() == 6 => Ok(Self::ExportSnapshot {
+                profile_path: PathBuf::from(&values[2]),
+                job_path: PathBuf::from(&values[3]),
+                output_dir: PathBuf::from(&values[4]),
+                catalog_path: values.get(5).map(|v| PathBuf::from(v.as_str())),
+            }),
             "query-latest" if values.len() == 4 => Ok(Self::QueryLatest {
                 profile_path: PathBuf::from(&values[2]),
                 filter_path: PathBuf::from(&values[3]),
+            }),
+            "query-advanced" if values.len() == 4 => Ok(Self::QueryAdvanced {
+                profile_path: PathBuf::from(&values[2]),
+                request_path: PathBuf::from(&values[3]),
             }),
             "evaluate-watchlist" if values.len() == 4 => Ok(Self::EvaluateWatchlist {
                 profile_path: PathBuf::from(&values[2]),
@@ -478,9 +413,7 @@ impl CliCommand {
             "health" if values.len() == 3 => Ok(Self::Health {
                 profile_path: PathBuf::from(&values[2]),
             }),
-            other => Err(OperatorError::Cli(format!(
-                "unsupported or malformed command `{other}`"
-            ))),
+            other => Err(OperatorError::Cli(format!("unsupported or malformed command `{other}`"))),
         }
     }
 }
@@ -488,10 +421,6 @@ impl CliCommand {
 pub fn run_cli_command(command: CliCommand) -> Result<OperatorResponse, OperatorError> {
     let now = Utc::now();
     match command {
-        CliCommand::VerifyPackets { request_path } => {
-            let request: PacketVerificationRequest = load_json(request_path)?;
-            Ok(OperatorResponse::PacketVerification(verify_packet_request(&request)?))
-        }
         CliCommand::ValidateProfile { profile_path } => {
             let profile = EngineProfile::load_json_file(profile_path)?;
             let view = ViewJob {
@@ -505,35 +434,30 @@ pub fn run_cli_command(command: CliCommand) -> Result<OperatorResponse, Operator
             };
             Ok(OperatorResponse::Topology(TopologyViewMaterialization {
                 view_id: view.id,
-                nodes: profile
-                    .nodes
-                    .iter()
-                    .map(|node| crate::materialize::TopologyNodeView {
-                        entity_id: node.id,
-                        label: node.label.clone(),
-                        kind_label: format!("{:?}", node.kind),
-                        position: node.position,
-                        metrics: Vec::new(),
-                    })
-                    .collect(),
+                nodes: profile.nodes.iter().map(|node| crate::materialize::TopologyNodeView {
+                    entity_id: node.id,
+                    label: node.label.clone(),
+                    kind_label: format!("{:?}", node.kind),
+                    position: node.position,
+                    metrics: Vec::new(),
+                }).collect(),
                 edges: Vec::new(),
                 boundaries: Vec::new(),
             }))
         }
+        CliCommand::VerifyPackets { request_path } => {
+            let request: PacketVerificationRequest = load_json(request_path)?;
+            Ok(OperatorResponse::PacketVerification(verify_packet_request(&request)?))
+        }
         CliCommand::Tick { profile_path } => {
             let profile = EngineProfile::load_json_file(profile_path)?;
-            let exporter =
-                SnapshotExporter::new(std::env::temp_dir().join("skeletrace-cli"), None)?;
+            let exporter = SnapshotExporter::new(std::env::temp_dir().join("skeletrace-cli"), None)?;
             let mut api = OperatorApi::from_profile(&profile, exporter, now)?;
             api.execute(OperatorRequest::Tick { now })
         }
-        CliCommand::PollSource {
-            profile_path,
-            source_id,
-        } => {
+        CliCommand::PollSource { profile_path, source_id } => {
             let profile = EngineProfile::load_json_file(profile_path)?;
-            let exporter =
-                SnapshotExporter::new(std::env::temp_dir().join("skeletrace-cli"), None)?;
+            let exporter = SnapshotExporter::new(std::env::temp_dir().join("skeletrace-cli"), None)?;
             let mut api = OperatorApi::from_profile(&profile, exporter, now)?;
             let parsed = uuid::Uuid::parse_str(&source_id)
                 .map_err(|err| OperatorError::Cli(err.to_string()))?;
@@ -547,8 +471,7 @@ pub fn run_cli_command(command: CliCommand) -> Result<OperatorResponse, Operator
             view_path,
         } => {
             let profile = EngineProfile::load_json_file(profile_path)?;
-            let exporter =
-                SnapshotExporter::new(std::env::temp_dir().join("skeletrace-cli"), None)?;
+            let exporter = SnapshotExporter::new(std::env::temp_dir().join("skeletrace-cli"), None)?;
             let mut api = OperatorApi::from_profile(&profile, exporter, now)?;
             let view: ViewJob = load_json(view_path)?;
             api.execute(OperatorRequest::MaterializeTopology { view, now })
@@ -558,8 +481,7 @@ pub fn run_cli_command(command: CliCommand) -> Result<OperatorResponse, Operator
             view_path,
         } => {
             let profile = EngineProfile::load_json_file(profile_path)?;
-            let exporter =
-                SnapshotExporter::new(std::env::temp_dir().join("skeletrace-cli"), None)?;
+            let exporter = SnapshotExporter::new(std::env::temp_dir().join("skeletrace-cli"), None)?;
             let mut api = OperatorApi::from_profile(&profile, exporter, now)?;
             let view: ViewJob = load_json(view_path)?;
             api.execute(OperatorRequest::MaterializeSparseGeo { view, now })
@@ -576,32 +498,34 @@ pub fn run_cli_command(command: CliCommand) -> Result<OperatorResponse, Operator
             let job: SnapshotExportJob = load_json(job_path)?;
             api.execute(OperatorRequest::ExportSnapshot { job, now })
         }
-        CliCommand::QueryLatest {
-            profile_path,
-            filter_path,
-        } => {
+        CliCommand::QueryLatest { profile_path, filter_path } => {
             let profile = EngineProfile::load_json_file(profile_path)?;
-            let exporter =
-                SnapshotExporter::new(std::env::temp_dir().join("skeletrace-cli"), None)?;
+            let exporter = SnapshotExporter::new(std::env::temp_dir().join("skeletrace-cli"), None)?;
             let mut api = OperatorApi::from_profile(&profile, exporter, now)?;
             let filter: QueryFilter = load_json(filter_path)?;
             api.execute(OperatorRequest::QueryLatest { filter, now })
         }
-        CliCommand::EvaluateWatchlist {
-            profile_path,
-            watchlist_path,
-        } => {
+        CliCommand::QueryAdvanced { profile_path, request_path } => {
             let profile = EngineProfile::load_json_file(profile_path)?;
-            let exporter =
-                SnapshotExporter::new(std::env::temp_dir().join("skeletrace-cli"), None)?;
+            let exporter = SnapshotExporter::new(std::env::temp_dir().join("skeletrace-cli"), None)?;
+            let mut api = OperatorApi::from_profile(&profile, exporter, now)?;
+            let saved: SavedQuery = load_json(request_path)?;
+            saved.validate()?;
+            api.execute(OperatorRequest::QueryAdvanced {
+                request: saved.request,
+                now,
+            })
+        }
+        CliCommand::EvaluateWatchlist { profile_path, watchlist_path } => {
+            let profile = EngineProfile::load_json_file(profile_path)?;
+            let exporter = SnapshotExporter::new(std::env::temp_dir().join("skeletrace-cli"), None)?;
             let mut api = OperatorApi::from_profile(&profile, exporter, now)?;
             let watchlist: Watchlist = load_json(watchlist_path)?;
             api.execute(OperatorRequest::EvaluateWatchlist { watchlist, now })
         }
         CliCommand::Health { profile_path } => {
             let profile = EngineProfile::load_json_file(profile_path)?;
-            let exporter =
-                SnapshotExporter::new(std::env::temp_dir().join("skeletrace-cli"), None)?;
+            let exporter = SnapshotExporter::new(std::env::temp_dir().join("skeletrace-cli"), None)?;
             let mut api = OperatorApi::from_profile(&profile, exporter, now)?;
             api.execute(OperatorRequest::HealthReport { now })
         }

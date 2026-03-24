@@ -33,11 +33,19 @@ impl BackoffStrategy {
                 }
                 let multiplier = 1u32.checked_shl(attempt).unwrap_or(u32::MAX);
                 let raw = base.saturating_mul(multiplier);
-                if raw > *max { *max } else { raw }
+                if raw > *max {
+                    *max
+                } else {
+                    raw
+                }
             }
             Self::Linear { step, max } => {
                 let raw = step.saturating_mul(attempt.saturating_add(1));
-                if raw > *max { *max } else { raw }
+                if raw > *max {
+                    *max
+                } else {
+                    raw
+                }
             }
             Self::Fixed(d) => *d,
         }
@@ -192,7 +200,9 @@ fn apply_jitter(delay: Duration) -> Duration {
 
     let jitter_range = ms / 4; // 25 %
     let jitter_offset = nanos % (jitter_range * 2 + 1);
-    let jittered = ms.saturating_sub(jitter_range).saturating_add(jitter_offset);
+    let jittered = ms
+        .saturating_sub(jitter_range)
+        .saturating_add(jitter_offset);
 
     Duration::from_millis(jittered)
 }

@@ -63,7 +63,11 @@ pub use snapshot::{ExportFormat, SnapshotManifest, SnapshotRequest};
 pub use spatial::{CartesianCoord, Ellipsoid, GeoBBox, GeoCoord, WGS84};
 pub use store::{BatchIngestReport, EngineStore, SampleIngestOutcome, StoreError, StoreStats};
 pub use transport::{AuthConfig, HeaderPair, HttpRequestProfile, ProxyRoute, TransportError};
-pub use materialize::{MaterializedMetricValue, SparseGeoFeature, SparseGeoFeatureCollection, SparseGeoGeometry, SparseGeoMaterializer, SparseGeoViewMaterialization, TopologyBoundaryView, TopologyEdgeView, TopologyMaterializer, TopologyNodeView, TopologyViewMaterialization};
+pub use materialize::{
+    MaterializedMetricValue, SparseGeoFeature, SparseGeoFeatureCollection, SparseGeoGeometry,
+    SparseGeoMaterializer, SparseGeoViewMaterialization, TopologyBoundaryView, TopologyEdgeView,
+    TopologyMaterializer, TopologyNodeView, TopologyViewMaterialization,
+};
 pub use types::{
     Confidence, EntityId, FlowId, MetricId, Priority, Quality, SnapshotId, SourceId, Tag,
     Timestamp, ValidationError, ViewJobId,
@@ -71,18 +75,24 @@ pub use types::{
 pub use view::{DataCard, DataCardField, RenderRule, TimeRange, ViewJob, ViewKind};
 pub use warm_store::{SqliteWarmStore, WarmStoreError, WarmStoreMaintenanceReport};
 
-
-pub use export::{ExportError, SnapshotExportJob, SnapshotExportResult, SnapshotExporter, SqliteSnapshotCatalog};
+pub use export::{
+    ExportError, SnapshotExportJob, SnapshotExportResult, SnapshotExporter, SqliteSnapshotCatalog,
+};
 pub use operator::{
     CliCommand, OperatorApi, OperatorError, OperatorRequest, OperatorResponse, run_cli_command,
 };
-pub use profile::{AdapterProfile, EngineProfile, ProfileError, SourceProfile, SqliteProfileStore};
-
+pub use profile::{
+    AdapterProfile, EngineProfile, ProfileError, SourceProfile, SqliteProfileStore,
+};
 
 pub use metric::{MetricRetentionReport, RetentionTuning};
-pub use observability::{EngineEvent, EventBuffer, EventBufferConfig, EventCounts, EventKind, EventLevel};
-pub use profiling::{CacheHealthReport, DurationStats, EngineHealthReport, PerfProbeConfig, PerfProbeReport, SourceHealthCount};
-
+pub use observability::{
+    EngineEvent, EventBuffer, EventBufferConfig, EventCounts, EventKind, EventLevel,
+};
+pub use profiling::{
+    CacheHealthReport, DurationStats, EngineHealthReport, PerfProbeConfig, PerfProbeReport,
+    SourceHealthCount,
+};
 
 pub use governance::{
     AuditRecord, AuditTrail, AutomationSupport, ExportAuditRecord, FailureClass, FailureRecord,
@@ -91,13 +101,22 @@ pub use governance::{
 };
 pub use replay::{ReplayBatch, ReplayHarness};
 
+pub use workload::{
+    ReplayBenchmarkReport, ReplayBenchmarkRequest, ReplayIngestReport, ReplayWorkloadRequest,
+    SourceWorkloadSummary, ViewProfileTarget, WorkloadCheckpointReport, WorkloadFixture,
+    WorkloadRunReport,
+};
 
-pub use workload::{ReplayBenchmarkReport, ReplayBenchmarkRequest, ReplayIngestReport, ReplayWorkloadRequest, SourceWorkloadSummary, ViewProfileTarget, WorkloadCheckpointReport, WorkloadFixture, WorkloadRunReport};
+pub use query::{
+    AlertEvent, AlertRule, EntityClass, EntitySelector, NumericPredicate, QueryFilter,
+    QueryGroupKey, QueryGroupSummary, QueryRequest, QueryResult, QueryResultEnvelope, QueryRow,
+    QueryRowComparison, QuerySortKey, SavedQuery, WatchItem, Watchlist, WatchlistEvaluation,
+};
 
-
-pub use query::{AlertEvent, AlertRule, EntityClass, EntitySelector, NumericPredicate, QueryFilter, QueryResult, QueryRow, WatchItem, Watchlist, WatchlistEvaluation};
-
-pub use lookyloo::{LookylooCaptureSummary, LookylooMetricBindings, LookylooSourceConfig, LookylooSummaryAdapter, LookylooTopologyAdapter, LookylooTopologyConfig};
+pub use lookyloo::{
+    LookylooCaptureSummary, LookylooMetricBindings, LookylooSourceConfig, LookylooSummaryAdapter,
+    LookylooTopologyAdapter, LookylooTopologyConfig,
+};
 
 pub use packet::{
     analyze_packets, render_packet_landscape_frame, verify_packet_events, PacketEvent,

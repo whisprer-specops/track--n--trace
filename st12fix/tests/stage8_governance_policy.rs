@@ -4,13 +4,12 @@ use std::time::Duration;
 use chrono::Utc;
 use skeletrace::{
     AdapterError, AdapterKind, AuditRecord, CacheBudget, Confidence, EngineConfig, EngineError,
-    EntityId, EntityStatus, ExportFormat, FlowId, GeoCoord, InterpolationMethod,
-    ManualPushAdapter, MetricDefinition, MetricId, MetricValueType, Node, NodeKind,
-    PollCadence, Priority, Quality, ReplayBatch, ReplayHarness, RetentionPolicy, Sample,
-    SampleValue, SnapshotExportJob, SnapshotExporter, SnapshotRequest, SourceAdapter,
-    SourceCapabilityProfile, SourceCostModel, SourceDefinition, SourceHealth, SourceId,
-    SourceKind, SourcePolicy, SourcePull, SourceSchedule, SkeletraceEngine, Tag, TimeRange,
-    TransportSupport, ViewJob, ViewJobId, ViewKind,
+    EntityId, EntityStatus, ExportFormat, FlowId, GeoCoord, InterpolationMethod, ManualPushAdapter,
+    MetricDefinition, MetricId, MetricValueType, Node, NodeKind, PollCadence, Priority, Quality,
+    ReplayBatch, ReplayHarness, RetentionPolicy, Sample, SampleValue, SkeletraceEngine,
+    SnapshotExportJob, SnapshotExporter, SnapshotRequest, SourceAdapter, SourceCapabilityProfile,
+    SourceCostModel, SourceDefinition, SourceHealth, SourceId, SourceKind, SourcePolicy,
+    SourcePull, SourceSchedule, Tag, TimeRange, TransportSupport, ViewJob, ViewJobId, ViewKind,
 };
 
 fn manual_source(source_id: SourceId) -> SourceDefinition {
@@ -69,7 +68,12 @@ fn node(entity_id: EntityId, now: chrono::DateTime<chrono::Utc>) -> Node {
     }
 }
 
-fn sample(entity_id: EntityId, metric_id: MetricId, source_id: SourceId, now: chrono::DateTime<chrono::Utc>) -> Sample {
+fn sample(
+    entity_id: EntityId,
+    metric_id: MetricId,
+    source_id: SourceId,
+    now: chrono::DateTime<chrono::Utc>,
+) -> Sample {
     Sample {
         entity_id,
         metric_id,
@@ -186,7 +190,9 @@ fn successful_poll_records_sample_audit_and_export_audit() {
     })
     .unwrap();
 
-    engine.register_metric(numeric_metric(metric_id, source_id, "volume")).unwrap();
+    engine
+        .register_metric(numeric_metric(metric_id, source_id, "volume"))
+        .unwrap();
     engine.register_node(node(entity_id, now)).unwrap();
     engine
         .register_source(
@@ -245,7 +251,9 @@ fn successful_poll_records_sample_audit_and_export_audit() {
     engine.record_export_audit(&result, &job, now);
 
     let audit = engine.recent_audit_records(8);
-    assert!(audit.iter().any(|entry| matches!(entry, AuditRecord::Export(_))));
+    assert!(audit
+        .iter()
+        .any(|entry| matches!(entry, AuditRecord::Export(_))));
 }
 
 #[test]
