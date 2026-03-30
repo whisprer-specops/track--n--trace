@@ -1,0 +1,70 @@
+fren, can you suggest any significant osint sources i've missed from this list of possible options for a software i'm developing - i need to be thorough so i odnt miss a good source but aware of possible consequences suhc as involvingg privacy invasion or legality or cost etc. any you can add would be great halp!
+
+possible_sources.txt
+Completed 2 steps
+Yes — the biggest likely gaps in your list are entity-resolution sources rather than more map/event feeds: company registries, court/legal records, sanctions/PEP/watchlists, domain/DNS/passive internet data, code/package ecosystems, web archives, procurement data, and app-store/mobile telemetry. Your current file is already strong on geospatial and spatiotemporal collection — APIs, feeds, scraping targets, onion sources, passive RF/IoT, remote sensing, metadata extraction, and alt-data — so the highest-value additions are the sources that help you connect people, firms, infrastructure, and historical change over time.
+​
+
+Scope checks
+Two fast questions matter before you lock architecture: are you building for lawful commercial due diligence/KYC/cyber use cases, or for broader investigative workflows; and do you want mostly global coverage, or deep UK/EU coverage first? I’d also challenge one assumption: “publicly reachable” is not the same as low-risk, because some categories in your current list drift quickly into privacy, terms-of-service, or regulated-data issues even when technically accessible.
+​
+
+High-value additions
+Here are the major source families I’d add because they fill obvious coverage gaps relative to your current list.
+​
+
+Source family	Why it matters	Typical examples	Main downside
+Company registries	Core for entity resolution, directors, addresses, beneficial ownership, filings	Companies House, OpenCorporates, SEC EDGAR, national business registers	Coverage varies by country; some fields are paid or rate-limited
+Court and legal records	High-value for disputes, fraud signals, insolvency, enforcement, litigation history	PACER, CourtListener, local court portals, bankruptcy/insolvency registers	Fragmented access, fee friction, privacy sensitivity
+Sanctions / PEP / watchlists	Essential for compliance, risk scoring, and commercial OSINT buyers	OFAC, UK sanctions list, EU sanctions, UN lists, Interpol notices	False positives, identity matching risk, some commercial enrichment is expensive
+Procurement / grants / lobbying	Strong institutional signal for influence, contracts, and vendor relationships	USASpending, Contracts Finder, TED, SAM.gov, lobbying registers	Messy schemas, duplicate entities, country-specific quirks
+Whois / DNS / passive DNS / BGP	Critical for internet infrastructure mapping and cyber OSINT	RDAP, SecurityTrails, RiskIQ/PassiveTotal, bgp.tools, crt.sh	Good data often costs money; some datasets are heavily commercialized
+Code / package ecosystems	Great for developer footprint, dependency risk, leaked keys, org mapping	GitHub, GitLab, npm, PyPI, crates.io, RubyGems, Docker Hub	Attribution is noisy; scraping can violate ToS
+Web archives / historical capture	Lets you prove change over time, deleted content, rebrands, old contacts	Wayback Machine, Common Crawl, archive.today	Storage and normalization overhead; archive access can be inconsistent
+Breach / exposed credential data	Very high investigative value for correlation and victim impact	HIBP-style exposure checks, leak corpora, paste/stealer references	Highest legal and ethical risk; often unsuitable for default ingestion
+App-store and mobile intel	Useful for company footprint, product launches, geographies, SDKs, permissions	Apple App Store, Google Play, app intelligence vendors	Commercial APIs can be expensive; metadata changes often
+Job postings / hiring signals	Excellent for competitive intel and stack/infrastructure detection	LinkedIn jobs, Indeed, Greenhouse boards, Lever, Workday	Scraping/legal issues; data is noisy and ephemeral
+Academic / patent / standards data	Good for R&D, inventor networks, and technical capability mapping	Google Patents, Lens, Espacenet, Crossref, OpenAlex	Less useful for short-horizon investigations
+Public records / gazettes / notices	High-value for official actions, dissolved entities, appointments, land/notice trails	Government gazettes, planning notices, land registries, FOI portals	Very jurisdiction-specific; some are paywalled
+Risk trade-offs
+I would split candidates into three product tiers rather than treating all “good sources” equally. Your current list already includes items with elevated privacy or legality concerns — such as Wi-Fi/Bluetooth probe capture, dark-web leak data, and retail foot-traffic/mobile-location style data — so adding more sources without a risk model will make the software harder to ship safely.
+​
+
+Low-risk/default: official registries, sanctions lists, court indexes, procurement, patents, archives, certificate transparency, RDAP.
+
+Medium-risk/controlled: social scraping, job boards, app stores, package ecosystems, passive DNS, some commercial enrichment feeds.
+
+High-risk/opt-in only: breach corpora, mobile ad-ID/location datasets, device probe data, onion-market data, credentials, anything touching special-category personal data.
+
+Design assumptions
+A few assumptions are worth pushing back on before you expand the source list. Because your project is aimed at commercially useful OSINT, the best sources are not always the most exotic; buyers usually get more value from clean registries, enforcement data, DNS history, and archived web changes than from niche “deep” feeds that are hard to normalize and dangerous to retain.
+​
+
+Also, source count is not the same as product quality. A thinner stack with strong provenance, deduplication, jurisdiction tags, legal basis flags, retention controls, and confidence scoring will usually beat a giant grab-bag of scraped feeds.
+
+Next steps
+My practical recommendation is to add these first, in order: company registries, sanctions/watchlists, court/legal records, DNS/passive internet data, web archives, code/package ecosystems, and procurement data. Then tag every source in your catalog with five fields before you build connectors: coverage, freshness, joinability, legal risk, and marginal cost.
+​
+
+For your software, I’d structure the ingestion roadmap like this:
+
+Build a “safe default” core around registries, sanctions, archives, CT/RDAP, procurement, and public legal records.
+
+Add enrichment connectors for DNS, code ecosystems, job postings, and app stores.
+
+Put breach, mobile-location, leak, and device-level sources behind explicit policy gates, customer eligibility checks, and retention limits.
+
+Confidence:
+
+Error-free status: 0.84
+
+Suitability for purpose: 0.94
+
+Effectiveness: 0.93
+
+Efficiency: 0.91
+
+Completeness: 0.88
+
+Refinement on the sub-0.9 areas: the only real uncertainty is that I have not yet seen your full intended customer segment breakdown or exact list formatting, so I optimized for the most commercially meaningful omissions relative to the geospatial-heavy file you attached. Want me to turn this into a concrete source matrix with columns like legality, likely cost, update cadence, API availability, and UK/EU privacy risk?
+​
